@@ -1,0 +1,23 @@
+analyte: "NO"
+display_name: "nitric oxide"
+anchor_seeds: data/seeds/no_anchor_seeds.faa
+anchor_families:
+  - name: hmp
+    pfam_required: ["PF00970"]
+    pfam_supporting: ["PF00042", "PF00175"]
+    role: primary
+  - name: norV
+    pfam_required: ["PF00301"]
+    pfam_supporting: ["PF00258", "PF19583"]
+    role: primary
+  - name: norB
+    pfam_required: ["PF00115"]
+    role: primary
+window_genes: 10
+known_organisms_table: data/references/known_no_organisms.csv
+expected_sensory_chemistry:
+  - heme
+  - iron_sulfur_4Fe4S
+  - iron_sulfur_2Fe2S
+  - flavin
+seed: 20260429

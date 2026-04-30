@@ -7,7 +7,7 @@ MM    no
 CONS  yes
 CS    no
 MAP   yes
-DATE  Thu Apr 30 02:34:33 2026
+DATE  Thu Apr 30 16:58:37 2026
 COM   [1] /Users/filiprumenovski/Code/GasRegNet/.venv/bin/gasregnet build-profiles --config configs --out-dir data/profiles --manifest-out data/profiles/profiles.yaml --source pfam --max-sequences 500
 NSEQ  500
 EFFN  4.375458

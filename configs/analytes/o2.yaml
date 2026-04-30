@@ -1,0 +1,22 @@
+analyte: O2
+display_name: "oxygen"
+anchor_seeds: data/seeds/o2_anchor_seeds.faa
+anchor_families:
+  - name: fnr
+    pfam_required: ["PF00027"]
+    pfam_supporting: ["PF13545"]
+    role: primary
+  - name: fixL
+    pfam_required: ["PF00989"]
+    pfam_supporting: ["PF00512", "PF02518"]
+    role: primary
+  - name: hemAT
+    pfam_required: ["PF11563"]
+    role: primary
+window_genes: 10
+known_organisms_table: data/references/known_o2_organisms.csv
+expected_sensory_chemistry:
+  - heme
+  - iron_sulfur_4Fe4S
+  - globin
+seed: 20260429

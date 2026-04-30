@@ -53,15 +53,17 @@ def figure_1_workflow_and_recovery_caption(benchmark_results: pl.DataFrame) -> s
 
 
 def figure_2_locus_landscape_caption(loci: pl.DataFrame) -> str:
-    """Caption for CO/CN locus landscape figure."""
+    """Caption for multi-analyte locus landscape figure."""
 
-    co_loci = _count_value(loci, "analyte", "CO")
-    cn_loci = _count_value(loci, "analyte", "CN")
+    counts = [
+        f"{analyte} {_count_value(loci, 'analyte', analyte)}"
+        for analyte in ("CO", "NO", "CN", "O2")
+    ]
     high_confidence = _count_value(loci, "locus_confidence", "high")
     taxa = _unique_count(loci, "taxon_id")
     return (
-        "CO and HCN searches resolve "
-        f"{co_loci} CO loci and {cn_loci} HCN loci across {taxa} taxa, "
+        "Gas-response searches resolve "
+        f"{', '.join(counts)} loci across {taxa} taxa, "
         f"with {high_confidence} high-confidence neighborhoods."
     )
 
@@ -70,7 +72,7 @@ def figure_3_archetype_atlas_caption(archetypes: pl.DataFrame) -> str:
     """Caption for recurrent gene-architecture atlas."""
 
     clauses: list[str] = []
-    for analyte in ("CO", "CN"):
+    for analyte in ("CO", "NO", "CN", "O2"):
         subset = archetypes.filter(pl.col("analyte") == analyte)
         total_loci = float(subset.select(pl.col("n_loci").sum()).item() or 0)
         top_loci = float(

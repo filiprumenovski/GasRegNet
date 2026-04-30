@@ -11,7 +11,7 @@ from gasregnet.errors import SchemaError
 
 DataFrameSchema = Any
 
-ANALYTES = ["CO", "CN"]
+ANALYTES = ["CO", "NO", "CN", "O2"]
 LOCUS_CONFIDENCE = ["high", "medium", "low", "control"]
 FUNCTIONAL_CLASSES = ["anchor", "regulator", "metabolic", "transporter", "unknown"]
 REGULATOR_CLASSES = [
@@ -280,7 +280,7 @@ BenchmarkSchema = _schema(
         "benchmark_id": _column(pl.Utf8),
         "analyte": _column(
             pl.Utf8,
-            checks=pa.Check.isin(["CO", "CN", "negative_control"]),
+            checks=pa.Check.isin([*ANALYTES, "negative_control"]),
         ),
         "protein_name": _column(pl.Utf8),
         "uniprot_accession": _column(pl.Utf8),

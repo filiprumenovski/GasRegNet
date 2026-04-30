@@ -10,3 +10,18 @@ targets:
       - cydB
       - cydX
       - cytochrome bd
+  - analyte: NO
+    terms:
+      - hmp
+      - norV
+      - norB
+      - nitric oxide
+      - flavohemoglobin
+      - flavorubredoxin
+  - analyte: O2
+    terms:
+      - fnr
+      - fixL
+      - hemAT
+      - oxygen sensor
+      - aerotaxis

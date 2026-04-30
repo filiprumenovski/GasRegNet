@@ -76,7 +76,7 @@ def figure_2_locus_landscape(loci: pl.DataFrame, out_dir: Path) -> Path:
             )
         ax.set_ylabel("Locus score")
         ax.set_xlabel("Loci sorted by analyte and score")
-        ax.set_title("CO and HCN locus landscape", loc="left")
+        ax.set_title("CO, NO, HCN, and O2 locus landscape", loc="left")
         return _save(fig, out_dir, "figure_2_locus_landscape")
 
 

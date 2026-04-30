@@ -8,7 +8,7 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF02738.full.stockholm.gz
   nseq: 500
-  sha256: d6b50650db3742229b8ff03550506c14441cf0ea9e815f76669fad52fe8746ce
+  sha256: 557f903f322368bd158ea12b567aee19902e44f57fdf904533006bd5f5913301
 - analyte: CO
   anchor_family: coxM
   pfam_id: PF03450
@@ -18,7 +18,7 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF03450.full.stockholm.gz
   nseq: 500
-  sha256: 19a12593e3e589e4dd6fa946be41837faeef5c09e983df776c21ff31ab6bb305
+  sha256: 94f297d5f57e27aa2d4460679b3a8809c3a3fd3cc482880d13ba288dfca165de
 - analyte: CO
   anchor_family: coxS
   pfam_id: PF01799
@@ -28,7 +28,37 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF01799.full.stockholm.gz
   nseq: 500
-  sha256: 0a5c16b2f8acf9c15b92326c01fe7c77c43960c3340e57b1f9cc971ef55610bf
+  sha256: 2bea15ee22e73a387ba29152590092e361be33411b15136c46dbe76f252a5731
+- analyte: 'NO'
+  anchor_family: hmp
+  pfam_id: PF00970
+  profile: data/profiles/hmp.hmm
+  seed_faa: data/seeds/no_anchor_seeds.faa
+  seed_accession: sp|P24232|HMP_ECOLI
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF00970.full.stockholm.gz
+  nseq: 500
+  sha256: 543cf532bd53a77643651b9af5ab27f4f1c4f3e246f32c3b00c87980464ad712
+- analyte: 'NO'
+  anchor_family: norV
+  pfam_id: PF00301
+  profile: data/profiles/norV.hmm
+  seed_faa: data/seeds/no_anchor_seeds.faa
+  seed_accession: sp|Q46877|NORV_ECOLI
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF00301.full.stockholm.gz
+  nseq: 500
+  sha256: 5fd17144acd4c643f11d10cb915deeb28fedebf8b3347f6f0ca8e3a5bae6449f
+- analyte: 'NO'
+  anchor_family: norB
+  pfam_id: PF00115
+  profile: data/profiles/norB.hmm
+  seed_faa: data/seeds/no_anchor_seeds.faa
+  seed_accession: sp|Q59647|NORB_PSEAE
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF00115.full.stockholm.gz
+  nseq: 500
+  sha256: 8f0970c59090604977cbb310219e370212ec013d47e520acea5d791b6b19ccce
 - analyte: CN
   anchor_family: cydA
   pfam_id: PF01654
@@ -38,7 +68,7 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF01654.full.stockholm.gz
   nseq: 500
-  sha256: c03217342149b202b3db4d4f31f76052a4bb618d2db382e87e598786d3b8b8bb
+  sha256: 3c47f430bc7a299fff10246e51ee4c00dfc6d2dcb92f6c16095b9c193c79d8e7
 - analyte: CN
   anchor_family: cydB
   pfam_id: PF02322
@@ -48,7 +78,7 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF02322.full.stockholm.gz
   nseq: 500
-  sha256: bb5e38e19fa40402259798a76589313faeda82136c8310d9dc9b11ca52a061bb
+  sha256: de18e4f7fb1a68ed4d27762297dd5af6cf628df6a2dfcc58d160adf3eea93dcc
 - analyte: CN
   anchor_family: cydX
   pfam_id: PF13456
@@ -58,4 +88,34 @@ profiles:
   selection_rule: pfam_full_mafft
   alignment: data/profiles/alignments/PF13456.full.stockholm.gz
   nseq: 500
-  sha256: bdc7e1e9a37811bdf7bc925a06b5306dad835f93e4883aacd24010c0a7ebb121
+  sha256: 3f5fdb0c9cf68851b180335ac66f3b535f2dfe10ea57afba6ea23d1b99e05122
+- analyte: O2
+  anchor_family: fnr
+  pfam_id: PF00027
+  profile: data/profiles/fnr.hmm
+  seed_faa: data/seeds/o2_anchor_seeds.faa
+  seed_accession: sp|P0A9E5|FNR_ECOLI
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF00027.full.stockholm.gz
+  nseq: 500
+  sha256: bce3524e72a585bf212440dce964e56f0b46e28acb6ec5b435e97694fec3183c
+- analyte: O2
+  anchor_family: fixL
+  pfam_id: PF00989
+  profile: data/profiles/fixL.hmm
+  seed_faa: data/seeds/o2_anchor_seeds.faa
+  seed_accession: sp|P23222|FIXL_BRADU
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF00989.full.stockholm.gz
+  nseq: 500
+  sha256: 5e8cdac70cc79188e00f45d6fb8c245ae624f9eca138bb221d28173634dc59ab
+- analyte: O2
+  anchor_family: hemAT
+  pfam_id: PF11563
+  profile: data/profiles/hemAT.hmm
+  seed_faa: data/seeds/o2_anchor_seeds.faa
+  seed_accession: sp|O07621|HEMAT_BACSU
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF11563.full.stockholm.gz
+  nseq: 500
+  sha256: 74d30012bb05b04028387f8d31042b124c83b0f310d022b673351fb36b24c296

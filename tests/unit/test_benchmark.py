@@ -56,7 +56,9 @@ def test_regulators_v2_benchmark_has_required_groups() -> None:
     }
 
     assert counts["CO"] >= 10
+    assert counts["NO"] >= 10
     assert counts["CN"] >= 10
+    assert counts["O2"] >= 10
     assert counts["negative_control"] >= 10
     assert benchmark.filter(pl.col("verify_pmid")).height > 0
     accessions = benchmark.filter(pl.col("uniprot_accession").str.len_chars() > 0)

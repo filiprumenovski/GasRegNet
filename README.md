@@ -1,7 +1,7 @@
 # GasRegNet
 
 GasRegNet is a comparative genomics package for discovering candidate bacterial
-gas-sensing transcriptional regulators. It implements the project contracts in
+gas-sensing transcriptional regulators across CO, NO, HCN, and O2. It implements the project contracts in
 `ARCHITECTURE.md`, `PREPRINT_PLAN.md`, and `ENGINEERING_PROMPT.md`: validated
 configuration, EFI-GNT SQLite ingestion, DuckDB RefSeq catalogs, corpus anchor
 detection, RefSeq neighborhood extraction, annotation, scoring, operon-level

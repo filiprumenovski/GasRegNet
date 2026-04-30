@@ -19,6 +19,18 @@ cn_seed_007,CN,cytochrome bd-II ubiquinol oxidase subunit I,,Escherichia coli K-
 cn_seed_008,CN,cytochrome bd-II ubiquinol oxidase subunit II,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
 cn_seed_009,CN,appC,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
 cn_seed_010,CN,appB,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+no_seed_001,NO,hmp,,Escherichia coli K-12 MG1655,511145,hmp,unknown,[],inferred,[],Seed NO flavohemoglobin benchmark row
+no_seed_002,NO,flavohemoprotein,,Escherichia coli K-12 MG1655,511145,hmp,unknown,[],inferred,[],Seed NO flavohemoglobin benchmark row
+no_seed_003,NO,norV,,Escherichia coli K-12 MG1655,511145,norV,unknown,[],inferred,[],Seed NO flavorubredoxin benchmark row
+no_seed_004,NO,flavorubredoxin,,Escherichia coli K-12 MG1655,511145,norV,unknown,[],inferred,[],Seed NO flavorubredoxin benchmark row
+no_seed_005,NO,norB,,Pseudomonas aeruginosa PAO1,208964,norB,unknown,[],inferred,[],Seed NO nitric oxide reductase benchmark row
+no_seed_006,NO,nitric oxide reductase subunit B,,Pseudomonas aeruginosa PAO1,208964,norB,unknown,[],inferred,[],Seed NO nitric oxide reductase benchmark row
+o2_seed_001,O2,fnr,,Escherichia coli K-12 MG1655,511145,fnr,unknown,[],inferred,[],Seed O2 FNR benchmark row
+o2_seed_002,O2,Fumarate and nitrate reduction regulatory protein,,Escherichia coli K-12 MG1655,511145,fnr,unknown,[],inferred,[],Seed O2 FNR benchmark row
+o2_seed_003,O2,fixL,,Bradyrhizobium diazoefficiens,224911,fixL,unknown,[],inferred,[],Seed O2 FixL benchmark row
+o2_seed_004,O2,HemAT,,Bacillus subtilis,224308,hemAT,unknown,[],inferred,[],Seed O2 HemAT benchmark row
+o2_seed_005,O2,DosP,,Escherichia coli K-12 MG1655,511145,dosP,unknown,[],inferred,[],Seed O2 heme-PAS benchmark row
+o2_seed_006,O2,NreB,,Staphylococcus carnosus,1280,nreB,unknown,[],inferred,[],Seed O2 Fe-S sensor benchmark row
 neg_seed_001,negative_control,lacZ,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control metabolic enzyme
 neg_seed_002,negative_control,lacY,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control transporter
 neg_seed_003,negative_control,trpA,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme

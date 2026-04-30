@@ -25,7 +25,7 @@ class AnchorFamilyConfig(StrictModel):
 
 
 class AnalyteConfig(StrictModel):
-    analyte: Literal["CO", "CN"]
+    analyte: Literal["CO", "NO", "CN", "O2"]
     display_name: str
     anchor_seeds: Path
     anchor_families: list[AnchorFamilyConfig]
@@ -167,7 +167,9 @@ def _compose_from_dir(config_dir: Path) -> dict[str, Any]:
     return {
         "analytes": [
             _read_yaml(config_dir / "analytes" / "co.yaml"),
+            _read_yaml(config_dir / "analytes" / "no.yaml"),
             _read_yaml(config_dir / "analytes" / "cn.yaml"),
+            _read_yaml(config_dir / "analytes" / "o2.yaml"),
         ],
         "regulator_families": _load_entries(
             config_dir / "regulator_families.yaml",

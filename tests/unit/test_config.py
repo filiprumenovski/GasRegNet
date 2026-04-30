@@ -12,7 +12,12 @@ def test_load_config_from_directory() -> None:
     config = load_config(Path("configs"))
 
     assert isinstance(config, GasRegNetConfig)
-    assert [analyte.analyte for analyte in config.analytes] == ["CO", "CN"]
+    assert [analyte.analyte for analyte in config.analytes] == [
+        "CO",
+        "NO",
+        "CN",
+        "O2",
+    ]
     assert config.seed == 20260429
     assert config.scoring.enrichment.case_control_ratio == (1, 3)
     assert config.sensory_domains[0].role == "sensor"
@@ -73,6 +78,32 @@ anchor_seeds: data/seeds/cn_anchor_seeds.faa
 anchor_families: []
 window_genes: 10
 known_organisms_table: data/references/known_cn_organisms.csv
+expected_sensory_chemistry: []
+seed: 20260429
+""",
+        encoding="utf-8",
+    )
+    (config_dir / "analytes" / "no.yaml").write_text(
+        """
+analyte: NO
+display_name: "nitric oxide"
+anchor_seeds: data/seeds/no_anchor_seeds.faa
+anchor_families: []
+window_genes: 10
+known_organisms_table: data/references/known_no_organisms.csv
+expected_sensory_chemistry: []
+seed: 20260429
+""",
+        encoding="utf-8",
+    )
+    (config_dir / "analytes" / "o2.yaml").write_text(
+        """
+analyte: O2
+display_name: "oxygen"
+anchor_seeds: data/seeds/o2_anchor_seeds.faa
+anchor_families: []
+window_genes: 10
+known_organisms_table: data/references/known_o2_organisms.csv
 expected_sensory_chemistry: []
 seed: 20260429
 """,
