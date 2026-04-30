@@ -32,6 +32,7 @@ def test_help_lists_core_subcommands() -> None:
         "run-sqlite",
         "diamond-search",
         "annotate",
+        "assign-roles",
         "score",
         "enrich",
         "archetypes",
@@ -150,6 +151,7 @@ def test_stage_commands_write_scored_enrichment_and_archetypes(tmp_path: Path) -
     scored = tmp_path / "scored"
     enriched = tmp_path / "enriched"
     archetypes = tmp_path / "archetypes"
+    roles = tmp_path / "roles"
     run_sqlite_demo(
         out_dir=source,
         config_path=Path("configs/headline.yaml"),
@@ -204,15 +206,29 @@ def test_stage_commands_write_scored_enrichment_and_archetypes(tmp_path: Path) -
             str(archetypes),
         ],
     )
+    roles_result = runner.invoke(
+        app,
+        [
+            "assign-roles",
+            "--neighborhoods",
+            str(annotated),
+            "--config",
+            "configs",
+            "--out",
+            str(roles),
+        ],
+    )
 
     assert annotate_result.exit_code == 0
     assert score_result.exit_code == 0
     assert enrich_result.exit_code == 0
     assert archetypes_result.exit_code == 0
+    assert roles_result.exit_code == 0
     assert (annotated / "intermediate" / "genes.parquet").exists()
     assert (scored / "intermediate" / "candidates.parquet").exists()
     assert (enriched / "intermediate" / "enrichment.parquet").exists()
     assert (archetypes / "intermediate" / "archetypes.parquet").exists()
+    assert (roles / "intermediate" / "sensor_regulator_pairs.parquet").exists()
 
 
 def test_repro_command_invokes_snakemake(

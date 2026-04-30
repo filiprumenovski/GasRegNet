@@ -7,6 +7,10 @@ from pathlib import Path
 
 import polars as pl
 
+from gasregnet.annotation.roles import (
+    assign_sensor_roles,
+    build_sensor_regulator_pairs,
+)
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.io.parquet import write_parquet
@@ -29,6 +33,7 @@ from gasregnet.schemas import (
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
+    SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.enrichment import run_enrichment
@@ -44,6 +49,7 @@ def _write_frame_set(
     candidates: pl.DataFrame,
     enrichment: pl.DataFrame,
     archetypes: pl.DataFrame,
+    sensor_regulator_pairs: pl.DataFrame,
 ) -> None:
     intermediate = out_dir / "intermediate"
     write_parquet(
@@ -63,6 +69,11 @@ def _write_frame_set(
         EnrichmentResultsSchema,
     )
     write_parquet(archetypes, intermediate / "archetypes.parquet", ArchetypesSchema)
+    write_parquet(
+        sensor_regulator_pairs,
+        intermediate / "sensor_regulator_pairs.parquet",
+        SensorRegulatorPairsSchema,
+    )
 
 
 def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
@@ -104,6 +115,18 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
     resolve_and_dump(config, out_dir)
 
     loci, genes = retrieve_from_efi_sqlite(sqlite, ["CO", "CN"])
+    genes = assign_sensor_roles(
+        genes,
+        regulator_families=config.regulator_families,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
+    sensor_regulator_pairs = build_sensor_regulator_pairs(
+        genes,
+        loci,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
     scored_loci = score_loci(loci, config.scoring)
     co_locus_ids = (
         scored_loci.filter(pl.col("analyte") == "CO")["locus_id"].unique().to_list()
@@ -132,6 +155,7 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         candidates=candidates,
         enrichment=enrichment,
         archetypes=archetypes,
+        sensor_regulator_pairs=sensor_regulator_pairs,
     )
     write_publication_tables(
         benchmark_recovery=benchmark,

@@ -20,6 +20,7 @@ def test_sqlite_demo_pipeline_writes_report_artifacts(tmp_path: Path) -> None:
     assert (out_dir / "manifest.json").exists()
     assert (out_dir / "config.resolved.yaml").exists()
     assert pl.read_parquet(out_dir / "intermediate" / "candidates.parquet").height == 2
+    assert (out_dir / "intermediate" / "sensor_regulator_pairs.parquet").exists()
     assert (out_dir / "tables" / "T6_tool_feature_comparison.md").exists()
     assert (out_dir / "figures" / "figure_4_chemistry_partition.png").exists()
     assert (

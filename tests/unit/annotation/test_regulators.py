@@ -24,8 +24,8 @@ def test_classify_regulators_matches_configured_one_component_family() -> None:
     assert _classify_with_pfams(["PF01047"]) == "one_component"
 
 
-def test_classify_regulators_prioritizes_response_receiver() -> None:
-    assert _classify_with_pfams(["PF00072", "PF01047"]) == "two_component_rr"
+def test_classify_regulators_lets_specific_hth_beat_generic_receiver() -> None:
+    assert _classify_with_pfams(["PF00072", "PF01047"]) == "one_component"
 
 
 def test_classify_regulators_prioritizes_histidine_kinase() -> None:

@@ -75,6 +75,8 @@ class RegulatorFamilyEntry(StrictModel):
     regulator_class: str = Field(alias="class")
     pfam_required: list[str]
     pfam_optional: list[str] = Field(default_factory=list)
+    notes: str = ""
+    sensor_role_default: str | None = None
 
 
 class SensoryDomainEntry(StrictModel):

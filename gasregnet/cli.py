@@ -8,6 +8,10 @@ import polars as pl
 
 from gasregnet.annotation.domains import annotate_domains
 from gasregnet.annotation.regulators import classify_regulators
+from gasregnet.annotation.roles import (
+    assign_sensor_roles,
+    build_sensor_regulator_pairs,
+)
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.assets import Downloader, fetch_assets
 from gasregnet.benchmark import (
@@ -48,6 +52,7 @@ from gasregnet.schemas import (
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
+    SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.enrichment import run_enrichment
@@ -803,6 +808,77 @@ def annotate_command(
         out,
     )
     click.echo(f"wrote annotated outputs to {out}")
+
+
+@app.command("assign-roles", help="Assign V2 anchor, regulator, and sensor roles.")
+@click.option(
+    "--neighborhoods",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing loci.parquet and genes.parquet.",
+)
+@click.option(
+    "--config",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Config directory or YAML.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory.",
+)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def assign_roles_command(
+    neighborhoods: Path,
+    config: Path,
+    out: Path,
+    seed: int,
+    verbose: bool,
+) -> None:
+    """Assign V2 gene roles and sensor-regulator pairs."""
+
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    input_dir = _intermediate_dir(neighborhoods)
+    cfg = load_config(config)
+    loci = read_parquet(input_dir / "loci.parquet", LociSchema)
+    genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
+    assigned = assign_sensor_roles(
+        genes,
+        regulator_families=cfg.regulator_families,
+        sensory_domain_catalog=cfg.sensory_domains,
+        paired_evidence_rules=cfg.paired_evidence,
+    )
+    pairs = build_sensor_regulator_pairs(
+        assigned,
+        loci,
+        sensory_domain_catalog=cfg.sensory_domains,
+        paired_evidence_rules=cfg.paired_evidence,
+    )
+    write_parquet(loci, out / "intermediate" / "loci.parquet", LociSchema)
+    write_parquet(assigned, out / "intermediate" / "genes.parquet", GenesSchema)
+    write_parquet(
+        pairs,
+        out / "intermediate" / "sensor_regulator_pairs.parquet",
+        SensorRegulatorPairsSchema,
+    )
+    resolve_and_dump(cfg, out)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="assign-roles",
+            config_paths=_config_hash_paths(config),
+            input_paths={
+                "loci": input_dir / "loci.parquet",
+                "genes": input_dir / "genes.parquet",
+            },
+        ),
+        out,
+    )
+    click.echo(f"wrote role assignments to {out}")
 
 
 @app.command("score", help="Score annotated neighborhoods and candidate regulators.")

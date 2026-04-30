@@ -24,6 +24,7 @@ REGULATOR_CLASSES = [
     "none",
 ]
 ANCHOR_EVIDENCE_TYPES = ["term_scan", "diamond", "hmmer"]
+SENSOR_ROLES = ["anchor", "regulator", "sensor", "both", "accessory", "none"]
 
 
 def _column(dtype: Any, **kwargs: Any) -> pa.Column:
@@ -104,6 +105,27 @@ GenesSchema = _schema(
         "sensory_domains": _column(pl.List(pl.Utf8)),
         "is_anchor": _column(pl.Boolean),
         "is_regulator_candidate": _column(pl.Boolean),
+        "sensor_role": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(SENSOR_ROLES),
+            required=False,
+        ),
+    },
+)
+
+SensorRegulatorPairsSchema = _schema(
+    {
+        "pair_id": _column(pl.Utf8),
+        "analyte": _column(pl.Utf8, checks=pa.Check.isin(ANALYTES)),
+        "locus_id": _column(pl.Utf8),
+        "hk_gene_accession": _column(pl.Utf8),
+        "rr_gene_accession": _column(pl.Utf8),
+        "intergenic_distance_nt": _column(pl.Int64),
+        "co_strand": _column(pl.Boolean),
+        "hk_sensor_domains": _column(pl.List(pl.Utf8)),
+        "hk_sensory_chemistries": _column(pl.List(pl.Utf8)),
+        "rr_dna_binding_domains": _column(pl.List(pl.Utf8)),
+        "pair_score": _column(pl.Float64),
     },
 )
 

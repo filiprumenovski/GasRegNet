@@ -36,16 +36,23 @@ def _classify_regulator(
     pfam_ids: set[str],
     regulator_families: list[RegulatorFamilyEntry],
 ) -> str:
+    scores: dict[str, tuple[float, int]] = {}
     if "PF00072" in pfam_ids:
-        return "two_component_rr"
+        scores["two_component_rr"] = (1.0, 10)
     if _has_any(pfam_ids, {"PF00512", "PF02518"}):
-        return "two_component_hk"
+        scores["two_component_hk"] = (1.0, 9)
     if _has_any(pfam_ids, {"PF04542", "PF04545"}):
-        return "sigma"
-
+        scores["sigma"] = (1.0, 8)
     for entry in regulator_families:
         if _has_all(pfam_ids, set(entry.pfam_required)):
-            return entry.regulator_class
+            score = 2.0 + 0.5 * len(set(entry.pfam_optional) & pfam_ids)
+            priority = 100 - regulator_families.index(entry)
+            current = scores.get(entry.regulator_class)
+            if current is None or (score, priority) > current:
+                scores[entry.regulator_class] = (score, priority)
+    if not scores:
+        return "none"
+    return max(scores.items(), key=lambda item: (item[1][0], item[1][1]))[0]
     return "none"
 
 

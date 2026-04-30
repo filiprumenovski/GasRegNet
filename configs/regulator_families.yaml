@@ -1,4 +1,20 @@
 regulator_families:
+  - family: CooA_like
+    class: one_component
+    pfam_required: ["PF00027", "PF00325"]
+    pfam_optional: []
+    sensor_role_default: sensor
+    notes: "CooA-class regulators with N-terminal heme; regulator and sensor are the same protein."
+  - family: NorR
+    class: sigma54_activator
+    pfam_required: ["PF00158"]
+    pfam_optional: ["PF02954"]
+    notes: "Sigma-54 enhancer-binding nitric oxide regulator family."
+  - family: CRP_FNR_extended
+    class: one_component
+    pfam_required: ["PF00027"]
+    pfam_optional: ["PF00325"]
+    notes: "Includes CooA, FNR, and ANR; chemistry resolved by sensory evidence."
   - family: FNR/CRP
     class: one_component
     pfam_required: ["PF00027"]
@@ -35,6 +51,8 @@ regulator_families:
     class: one_component
     pfam_required: ["PF01022"]
     pfam_optional: []
+    sensor_role_default: sensor
+    notes: "Metalloregulator that binds metal ions through cysteine clusters."
   - family: LuxR/GerE
     class: one_component
     pfam_required: ["PF00196"]

@@ -9,6 +9,10 @@ from typing import Any
 import polars as pl
 import yaml  # type: ignore[import-untyped]
 
+from gasregnet.annotation.roles import (
+    assign_sensor_roles,
+    build_sensor_regulator_pairs,
+)
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.benchmark import evaluate_benchmark
 from gasregnet.config import load_config, resolve_and_dump
@@ -36,6 +40,7 @@ from gasregnet.schemas import (
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
+    SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.enrichment import run_enrichment
@@ -58,6 +63,7 @@ def _write_frame_set(
     candidates: pl.DataFrame,
     enrichment: pl.DataFrame,
     archetypes: pl.DataFrame,
+    sensor_regulator_pairs: pl.DataFrame,
 ) -> None:
     intermediate = out_dir / "intermediate"
     write_parquet(anchor_hits, intermediate / "anchor_hits.parquet", AnchorHitsSchema)
@@ -78,6 +84,11 @@ def _write_frame_set(
         EnrichmentResultsSchema,
     )
     write_parquet(archetypes, intermediate / "archetypes.parquet", ArchetypesSchema)
+    write_parquet(
+        sensor_regulator_pairs,
+        intermediate / "sensor_regulator_pairs.parquet",
+        SensorRegulatorPairsSchema,
+    )
 
 
 def _enrichment(
@@ -130,6 +141,18 @@ def run_corpus_discovery(
         root=root,
         window_genes=window_genes,
     )
+    genes = assign_sensor_roles(
+        genes,
+        regulator_families=config.regulator_families,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
+    sensor_regulator_pairs = build_sensor_regulator_pairs(
+        genes,
+        loci,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
     scored_loci = score_loci(loci, config.scoring)
     enrichment = _enrichment(
         scored_loci,
@@ -148,6 +171,7 @@ def run_corpus_discovery(
         candidates=candidates,
         enrichment=enrichment,
         archetypes=archetypes,
+        sensor_regulator_pairs=sensor_regulator_pairs,
     )
     write_publication_tables(
         benchmark_recovery=benchmark,
