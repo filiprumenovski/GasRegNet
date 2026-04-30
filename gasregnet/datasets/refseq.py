@@ -566,18 +566,36 @@ def detect_refseq_anchor_hits(
     *,
     root: Path,
     mode: str = "smoke",
+    config: Path | None = None,
+    profile_dir: Path = Path("data/profiles"),
+    bitscore_threshold: float | None = None,
+    e_value_threshold: float = 1e-20,
 ) -> pl.DataFrame:
     """Detect RefSeq anchors, using term scanning as the implemented smoke mode."""
 
+    if mode == "smoke":
+        return normalize_scan_anchor_hits(
+            scan_refseq_corpus(manifest, scan_config, root=root),
+        )
+    if mode in {"profile", "hmmer"}:
+        from gasregnet.search.anchors import detect_anchors_profile
+
+        return detect_anchors_profile(
+            manifest,
+            config=config or Path("configs"),
+            root=root,
+            profile_dir=profile_dir,
+            bitscore_threshold=bitscore_threshold,
+            e_value_threshold=e_value_threshold,
+        )
     if mode != "smoke":
         msg = (
             f"anchor detection mode {mode!r} is not implemented yet; "
-            "use mode='smoke' for term-scan anchor discovery"
+            "use mode='profile' for HMMER profile discovery or mode='smoke' "
+            "for term-scan anchor discovery"
         )
         raise NotImplementedError(msg)
-    return normalize_scan_anchor_hits(
-        scan_refseq_corpus(manifest, scan_config, root=root),
-    )
+    return _empty_anchor_hits()
 
 
 def _catalog_paths(catalogs: pl.DataFrame) -> dict[str, Path]:

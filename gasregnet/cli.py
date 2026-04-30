@@ -405,8 +405,34 @@ def scan_refseq_corpus_command(
     "--mode",
     default="smoke",
     show_default=True,
-    type=click.Choice(["smoke", "diamond", "hmmer"]),
+    type=click.Choice(["smoke", "profile", "diamond", "hmmer"]),
     help="Anchor detection mode.",
+)
+@click.option(
+    "--config",
+    default=Path("configs"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="GasRegNet config directory or headline config.",
+)
+@click.option(
+    "--profile-dir",
+    default=Path("data/profiles"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing anchor-family HMM profiles.",
+)
+@click.option(
+    "--bitscore-threshold",
+    type=float,
+    help="Optional minimum HMMER bitscore.",
+)
+@click.option(
+    "--e-value-threshold",
+    default=1e-20,
+    show_default=True,
+    type=float,
+    help="Maximum HMMER E-value.",
 )
 @click.option(
     "--root",
@@ -426,6 +452,10 @@ def detect_anchors_command(
     manifest: Path,
     scan_config: Path,
     mode: str,
+    config: Path,
+    profile_dir: Path,
+    bitscore_threshold: float | None,
+    e_value_threshold: float,
     root: Path,
     out: Path,
     verbose: bool,
@@ -439,9 +469,88 @@ def detect_anchors_command(
             scan_config,
             root=root,
             mode=mode,
+            config=config,
+            profile_dir=profile_dir,
+            bitscore_threshold=bitscore_threshold,
+            e_value_threshold=e_value_threshold,
         )
     except NotImplementedError as exc:
         raise click.ClickException(str(exc)) from exc
+    write_parquet(anchor_hits, out, AnchorHitsSchema)
+    click.echo(out)
+
+
+@app.command("detect-anchors-profile", help="Detect anchors with HMM profiles.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--config",
+    default=Path("configs"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="GasRegNet config directory or headline config.",
+)
+@click.option(
+    "--profile-dir",
+    default=Path("data/profiles"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing anchor-family HMM profiles.",
+)
+@click.option(
+    "--bitscore-threshold",
+    type=float,
+    help="Optional minimum HMMER bitscore.",
+)
+@click.option(
+    "--e-value-threshold",
+    default=1e-20,
+    show_default=True,
+    type=float,
+    help="Maximum HMMER E-value.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet output path.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def detect_anchors_profile_command(
+    manifest: Path,
+    config: Path,
+    profile_dir: Path,
+    bitscore_threshold: float | None,
+    e_value_threshold: float,
+    root: Path,
+    out: Path,
+    verbose: bool,
+) -> None:
+    """Detect anchors with profile HMMs and write normalized anchor hits."""
+
+    configure_logging(verbose=verbose)
+    anchor_hits = detect_refseq_anchor_hits(
+        manifest,
+        Path("configs/refseq_scan.yaml"),
+        root=root,
+        mode="profile",
+        config=config,
+        profile_dir=profile_dir,
+        bitscore_threshold=bitscore_threshold,
+        e_value_threshold=e_value_threshold,
+    )
     write_parquet(anchor_hits, out, AnchorHitsSchema)
     click.echo(out)
 

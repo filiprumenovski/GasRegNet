@@ -26,6 +26,7 @@ def test_help_lists_core_subcommands() -> None:
         "summarize-refseq-corpus",
         "scan-refseq-corpus",
         "detect-anchors",
+        "detect-anchors-profile",
         "extract-neighborhoods",
         "evaluate-benchmark",
         "build-benchmark",
