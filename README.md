@@ -50,6 +50,7 @@ Larger local datasets are declared in `configs/datasets.yaml`, downloaded with
 `aria2c` by `make datasets`, and written under ignored `data/external/`.
 `make index-datasets` converts those assets into local DuckDB reference catalogs
 under ignored `databases/`.
+`make summarize-datasets` reports catalog sizes and feature-linkage counts.
 
 ## CLI
 

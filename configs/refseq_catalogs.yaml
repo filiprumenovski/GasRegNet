@@ -1,0 +1,5 @@
+catalogs:
+  - dataset_name: ecoli_k12_mg1655
+    protein_faa: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_protein.faa.gz
+    gff: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_genomic.gff.gz
+    out_db: databases/ecoli_k12_mg1655.duckdb

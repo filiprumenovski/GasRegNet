@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import duckdb
 import polars as pl
+import yaml  # type: ignore[import-untyped]
 
 from gasregnet.io.fasta import read_fasta
 from gasregnet.io.gff import read_gff3
@@ -35,6 +37,12 @@ FEATURE_SCHEMA = {
 METADATA_SCHEMA = {
     "key": pl.Utf8,
     "value": pl.Utf8,
+}
+CATALOG_SCHEMA = {
+    "dataset_name": pl.Utf8,
+    "protein_faa": pl.Utf8,
+    "gff": pl.Utf8,
+    "out_db": pl.Utf8,
 }
 
 
@@ -153,6 +161,118 @@ def index_refseq_dataset(
     return out_db
 
 
+def read_refseq_catalog_manifest(manifest: Path, *, root: Path) -> pl.DataFrame:
+    """Read a RefSeq catalog manifest into a normalized table."""
+
+    payload = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("catalogs"), list):
+        raise ValueError(f"catalog manifest must contain a catalogs list: {manifest}")
+    rows: list[dict[str, str]] = []
+    for raw in payload["catalogs"]:
+        if not isinstance(raw, dict):
+            raise ValueError("catalog entries must be mappings")
+        dataset_name = raw.get("dataset_name")
+        protein_faa = raw.get("protein_faa")
+        gff = raw.get("gff")
+        out_db = raw.get("out_db")
+        if not isinstance(dataset_name, str) or not dataset_name:
+            raise ValueError("catalog entry is missing string field: dataset_name")
+        if not isinstance(protein_faa, str) or not protein_faa:
+            raise ValueError(f"catalog {dataset_name} is missing protein_faa")
+        if not isinstance(gff, str) or not gff:
+            raise ValueError(f"catalog {dataset_name} is missing gff")
+        if not isinstance(out_db, str) or not out_db:
+            raise ValueError(f"catalog {dataset_name} is missing out_db")
+        rows.append(
+            {
+                "dataset_name": dataset_name,
+                "protein_faa": str(root / protein_faa),
+                "gff": str(root / gff),
+                "out_db": str(root / out_db),
+            },
+        )
+    return pl.DataFrame(rows, schema=CATALOG_SCHEMA)
+
+
+def index_refseq_corpus(manifest: Path, *, root: Path) -> list[Path]:
+    """Index every RefSeq catalog declared in a corpus manifest."""
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
+    outputs: list[Path] = []
+    for row in catalogs.iter_rows(named=True):
+        outputs.append(
+            index_refseq_dataset(
+                protein_faa=Path(str(row["protein_faa"])),
+                gff=Path(str(row["gff"])),
+                out_db=Path(str(row["out_db"])),
+                dataset_name=str(row["dataset_name"]),
+            ),
+        )
+    return outputs
+
+
+def _metadata_map(connection: duckdb.DuckDBPyConnection) -> dict[str, str]:
+    rows = connection.execute("select key, value from metadata").fetchall()
+    return {str(key): str(value) for key, value in rows}
+
+
+def _scalar(connection: duckdb.DuckDBPyConnection, query: str) -> Any:
+    row = connection.execute(query).fetchone()
+    if row is None:
+        raise ValueError(f"query returned no rows: {query}")
+    return row[0]
+
+
+def summarize_refseq_catalog(db: Path) -> dict[str, Any]:
+    """Return summary statistics for one RefSeq DuckDB catalog."""
+
+    with duckdb.connect(str(db), read_only=True) as connection:
+        metadata = _metadata_map(connection)
+        n_cds = _scalar(
+            connection,
+            "select count(*) from features where feature_type = 'CDS'",
+        )
+        n_linked_features = _scalar(
+            connection,
+            "select count(*) from features where protein_accession is not null",
+        )
+        mean_length = _scalar(
+            connection,
+            "select avg(length_aa) from proteins",
+        )
+    return {
+        "dataset_name": metadata["dataset_name"],
+        "db": str(db),
+        "n_proteins": int(metadata["n_proteins"]),
+        "n_features": int(metadata["n_features"]),
+        "n_cds": int(n_cds),
+        "n_features_with_protein": int(n_linked_features),
+        "mean_protein_length_aa": float(mean_length or 0.0),
+    }
+
+
+def summarize_refseq_corpus(manifest: Path, *, root: Path) -> pl.DataFrame:
+    """Summarize every RefSeq catalog declared in a corpus manifest."""
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
+    rows = [
+        summarize_refseq_catalog(Path(str(row["out_db"])))
+        for row in catalogs.iter_rows(named=True)
+    ]
+    return pl.DataFrame(
+        rows,
+        schema={
+            "dataset_name": pl.Utf8,
+            "db": pl.Utf8,
+            "n_proteins": pl.Int64,
+            "n_features": pl.Int64,
+            "n_cds": pl.Int64,
+            "n_features_with_protein": pl.Int64,
+            "mean_protein_length_aa": pl.Float64,
+        },
+    )
+
+
 def query_refseq_catalog(db: Path, query: str, *, limit: int = 20) -> pl.DataFrame:
     """Search a DuckDB reference catalog by accession, locus tag, gene, or product."""
 
@@ -183,3 +303,43 @@ def query_refseq_catalog(db: Path, query: str, *, limit: int = 20) -> pl.DataFra
             """,
             [pattern, pattern, pattern, pattern, pattern, limit],
         ).pl()
+
+
+def query_refseq_corpus(
+    manifest: Path,
+    query: str,
+    *,
+    root: Path,
+    limit_per_catalog: int = 20,
+) -> pl.DataFrame:
+    """Search every RefSeq catalog declared in a corpus manifest."""
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
+    frames: list[pl.DataFrame] = []
+    for row in catalogs.iter_rows(named=True):
+        dataset_name = str(row["dataset_name"])
+        frame = query_refseq_catalog(
+            Path(str(row["out_db"])),
+            query,
+            limit=limit_per_catalog,
+        )
+        if not frame.is_empty():
+            frames.append(
+                frame.with_columns(pl.lit(dataset_name).alias("dataset_name")),
+            )
+    if not frames:
+        return pl.DataFrame(
+            schema={
+                "protein_accession": pl.Utf8,
+                "length_aa": pl.Int64,
+                "locus_tag": pl.Utf8,
+                "gene": pl.Utf8,
+                "product": pl.Utf8,
+                "seqid": pl.Utf8,
+                "start_nt": pl.Int64,
+                "end_nt": pl.Int64,
+                "strand": pl.Utf8,
+                "dataset_name": pl.Utf8,
+            },
+        )
+    return pl.concat(frames, how="vertical")

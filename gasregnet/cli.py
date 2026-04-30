@@ -11,7 +11,13 @@ from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.assets import Downloader, fetch_assets
 from gasregnet.config import load_config, resolve_and_dump
-from gasregnet.datasets.refseq import index_refseq_dataset, query_refseq_catalog
+from gasregnet.datasets.refseq import (
+    index_refseq_corpus,
+    index_refseq_dataset,
+    query_refseq_catalog,
+    query_refseq_corpus,
+    summarize_refseq_corpus,
+)
 from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
 from gasregnet.logging import configure_logging
@@ -193,6 +199,34 @@ def index_refseq_command(
     click.echo(output)
 
 
+@app.command("index-refseq-corpus", help="Index all RefSeq catalogs in a manifest.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def index_refseq_corpus_command(
+    manifest: Path,
+    root: Path,
+    verbose: bool,
+) -> None:
+    """Index all RefSeq catalogs declared in a manifest."""
+
+    configure_logging(verbose=verbose)
+    for output in index_refseq_corpus(manifest, root=root):
+        click.echo(output)
+
+
 @app.command("query-refseq", help="Search a DuckDB RefSeq reference catalog.")
 @click.option(
     "--db",
@@ -213,6 +247,76 @@ def query_refseq_command(
 
     configure_logging(verbose=verbose)
     frame = query_refseq_catalog(db, query_text, limit=limit)
+    click.echo(frame.write_csv())
+
+
+@app.command("query-refseq-corpus", help="Search all RefSeq catalogs in a manifest.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option("--query", "query_text", required=True, help="Search text.")
+@click.option(
+    "--limit-per-catalog",
+    default=20,
+    show_default=True,
+    help="Maximum result rows from each catalog.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def query_refseq_corpus_command(
+    manifest: Path,
+    root: Path,
+    query_text: str,
+    limit_per_catalog: int,
+    verbose: bool,
+) -> None:
+    """Search all RefSeq catalogs declared in a manifest."""
+
+    configure_logging(verbose=verbose)
+    frame = query_refseq_corpus(
+        manifest,
+        query_text,
+        root=root,
+        limit_per_catalog=limit_per_catalog,
+    )
+    click.echo(frame.write_csv())
+
+
+@app.command("summarize-refseq-corpus", help="Summarize RefSeq catalogs.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def summarize_refseq_corpus_command(
+    manifest: Path,
+    root: Path,
+    verbose: bool,
+) -> None:
+    """Summarize all RefSeq catalogs declared in a manifest."""
+
+    configure_logging(verbose=verbose)
+    frame = summarize_refseq_corpus(manifest, root=root)
     click.echo(frame.write_csv())
 
 
