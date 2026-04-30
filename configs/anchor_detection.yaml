@@ -1,4 +1,6 @@
-mode: smoke
+mode: profile
 catalogs: configs/refseq_catalogs.yaml
 scan_config: configs/refseq_scan.yaml
+profile_dir: data/profiles
+e_value_threshold: 1e-20
 output: results/corpus/intermediate/anchor_hits.parquet

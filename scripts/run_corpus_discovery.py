@@ -190,12 +190,21 @@ def run_corpus_discovery(
     benchmark_csv = root / str(corpus_config["benchmark"])
     window_genes = int(corpus_config.get("window_genes", 10))
     mode = str(corpus_config.get("mode", "smoke"))
+    profile_dir = root / str(corpus_config.get("profile_dir", "data/profiles"))
+    bitscore_threshold = corpus_config.get("bitscore_threshold")
+    e_value_threshold = float(corpus_config.get("e_value_threshold", 1e-20))
 
     anchor_hits = detect_refseq_anchor_hits(
         catalogs,
         scan_config,
         root=root,
         mode=mode,
+        config=config_path,
+        profile_dir=profile_dir,
+        bitscore_threshold=(
+            None if bitscore_threshold is None else float(bitscore_threshold)
+        ),
+        e_value_threshold=e_value_threshold,
     )
     loci, genes = extract_refseq_neighborhoods(
         anchor_hits,

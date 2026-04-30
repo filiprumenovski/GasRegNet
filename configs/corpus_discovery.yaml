@@ -1,7 +1,9 @@
-mode: smoke
+mode: profile
 out_dir: results/corpus
 catalogs: configs/refseq_catalogs.yaml
 scan_config: configs/refseq_scan.yaml
+profile_dir: data/profiles
+e_value_threshold: 1e-20
 benchmark: data/benchmarks/regulators_v2.csv
 window_genes: 10
 seed: 20260429
