@@ -11,6 +11,7 @@ import duckdb
 import polars as pl
 
 from gasregnet.errors import MissingInputError, SchemaError
+from gasregnet.neighborhoods.operons import anchor_operon_integrity
 from gasregnet.schemas import GenesSchema, LociSchema, validate
 
 REQUIRED_TABLES = {"neighborhoods", "genes"}
@@ -314,6 +315,13 @@ def read_efi_sqlite(
             parameters,
         )
 
-    loci_df = _build_loci(neighborhoods, analyte)
     genes_df = _build_genes(neighborhoods, genes, analyte)
+    loci_df = _build_loci(neighborhoods, analyte)
+    integrity = anchor_operon_integrity(genes_df)
+    if not integrity.is_empty():
+        loci_df = (
+            loci_df.drop("operon_integrity_score")
+            .join(integrity, on="locus_id", how="left")
+            .with_columns(pl.col("operon_integrity_score").fill_null(0.0))
+        )
     return validate(loci_df, LociSchema), validate(genes_df, GenesSchema)

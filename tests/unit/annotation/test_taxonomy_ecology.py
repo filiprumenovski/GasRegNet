@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 
-from gasregnet.annotation.ecology import score_taxonomic_context
+from gasregnet.annotation.ecology import (
+    score_taxonomic_context,
+    score_taxonomic_context_by_analyte,
+)
 from gasregnet.annotation.taxonomy import annotate_taxonomy
+from gasregnet.config import load_config
 from tests.unit.test_schemas import loci_frame
 
 
@@ -55,3 +61,22 @@ def test_score_taxonomic_context_scores_unknown_as_zero() -> None:
     scored = score_taxonomic_context(loci_frame(), known)
 
     assert scored["taxonomic_context_score"].item() == 0.0
+
+
+def test_score_taxonomic_context_by_analyte_uses_configured_tables(
+    tmp_path: Path,
+) -> None:
+    known = tmp_path / "known.csv"
+    known.write_text(
+        "organism,taxon_id,evidence,pmid,notes\n"
+        "Rhodospirillum rubrum,1085,literature,00000000,\n",
+        encoding="utf-8",
+    )
+    config = load_config(Path("configs"))
+    analyte = config.analytes[0].model_copy(
+        update={"known_organisms_table": known},
+    )
+
+    scored = score_taxonomic_context_by_analyte(loci_frame(), [analyte])
+
+    assert scored["taxonomic_context_score"].item() == 1.0

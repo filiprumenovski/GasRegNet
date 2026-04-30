@@ -1,43 +1,61 @@
 profiles:
 - analyte: CO
   anchor_family: coxL
+  pfam_id: PF02738
   profile: data/profiles/coxL.hmm
   seed_faa: data/seeds/co_anchor_seeds.faa
   seed_accession: sp|P19919|DCML_AFIC5
-  selection_rule: gene_symbol
-  sha256: 09007aa48b2cea4be116ce3e405fb31fffc1a584fd0672f99e41ee2d48e3adfa
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF02738.full.stockholm.gz
+  nseq: 500
+  sha256: d6b50650db3742229b8ff03550506c14441cf0ea9e815f76669fad52fe8746ce
 - analyte: CO
   anchor_family: coxM
+  pfam_id: PF03450
   profile: data/profiles/coxM.hmm
   seed_faa: data/seeds/co_anchor_seeds.faa
   seed_accession: sp|P19919|DCML_AFIC5
-  selection_rule: analyte_seed_fallback
-  sha256: cc3b065be86bdf36302885ba6bbf9813232742865a4cc9f7e37eaecac1573450
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF03450.full.stockholm.gz
+  nseq: 500
+  sha256: 19a12593e3e589e4dd6fa946be41837faeef5c09e983df776c21ff31ab6bb305
 - analyte: CO
   anchor_family: coxS
+  pfam_id: PF01799
   profile: data/profiles/coxS.hmm
   seed_faa: data/seeds/co_anchor_seeds.faa
   seed_accession: sp|P19919|DCML_AFIC5
-  selection_rule: analyte_seed_fallback
-  sha256: 08fbe11588ea72f4c31f09eaf903fdf82218931d94e6321de3eafe802ca45d70
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF01799.full.stockholm.gz
+  nseq: 500
+  sha256: 0a5c16b2f8acf9c15b92326c01fe7c77c43960c3340e57b1f9cc971ef55610bf
 - analyte: CN
   anchor_family: cydA
+  pfam_id: PF01654
   profile: data/profiles/cydA.hmm
   seed_faa: data/seeds/cn_anchor_seeds.faa
   seed_accession: sp|P0ABJ9|CYDA_ECOLI
-  selection_rule: gene_symbol
-  sha256: 88e31dd18d609a4285ac419b06aa275dfbf55984a137bdcc7154d120278fe0ad
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF01654.full.stockholm.gz
+  nseq: 500
+  sha256: c03217342149b202b3db4d4f31f76052a4bb618d2db382e87e598786d3b8b8bb
 - analyte: CN
   anchor_family: cydB
+  pfam_id: PF02322
   profile: data/profiles/cydB.hmm
   seed_faa: data/seeds/cn_anchor_seeds.faa
   seed_accession: sp|P0ABK2|CYDB_ECOLI
-  selection_rule: gene_symbol
-  sha256: 089844af3354e6a839be20a9df8853096361d6883692351c16b658e5d506a213
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF02322.full.stockholm.gz
+  nseq: 500
+  sha256: bb5e38e19fa40402259798a76589313faeda82136c8310d9dc9b11ca52a061bb
 - analyte: CN
   anchor_family: cydX
+  pfam_id: PF13456
   profile: data/profiles/cydX.hmm
   seed_faa: data/seeds/cn_anchor_seeds.faa
   seed_accession: sp|P56100|CYDX_ECOLI
-  selection_rule: gene_symbol
-  sha256: b51fc30dd5946e7e6671160d121013d74714cc95b5502c86c0dc4553259ae05a
+  selection_rule: pfam_full_mafft
+  alignment: data/profiles/alignments/PF13456.full.stockholm.gz
+  nseq: 500
+  sha256: bdc7e1e9a37811bdf7bc925a06b5306dad835f93e4883aacd24010c0a7ebb121

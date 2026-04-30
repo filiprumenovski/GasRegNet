@@ -1,7 +1,7 @@
-analyte,anchor_family,profile,seed_faa,seed_accession,selection_rule,sha256
-CO,coxL,data/profiles/coxL.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,gene_symbol,09007aa48b2cea4be116ce3e405fb31fffc1a584fd0672f99e41ee2d48e3adfa
-CO,coxM,data/profiles/coxM.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,analyte_seed_fallback,cc3b065be86bdf36302885ba6bbf9813232742865a4cc9f7e37eaecac1573450
-CO,coxS,data/profiles/coxS.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,analyte_seed_fallback,08fbe11588ea72f4c31f09eaf903fdf82218931d94e6321de3eafe802ca45d70
-CN,cydA,data/profiles/cydA.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABJ9|CYDA_ECOLI,gene_symbol,88e31dd18d609a4285ac419b06aa275dfbf55984a137bdcc7154d120278fe0ad
-CN,cydB,data/profiles/cydB.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABK2|CYDB_ECOLI,gene_symbol,089844af3354e6a839be20a9df8853096361d6883692351c16b658e5d506a213
-CN,cydX,data/profiles/cydX.hmm,data/seeds/cn_anchor_seeds.faa,sp|P56100|CYDX_ECOLI,gene_symbol,b51fc30dd5946e7e6671160d121013d74714cc95b5502c86c0dc4553259ae05a
+analyte,anchor_family,pfam_id,profile,seed_faa,seed_accession,selection_rule,alignment,nseq,sha256
+CO,coxL,PF02738,data/profiles/coxL.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,pfam_full_mafft,data/profiles/alignments/PF02738.full.stockholm.gz,500,d6b50650db3742229b8ff03550506c14441cf0ea9e815f76669fad52fe8746ce
+CO,coxM,PF03450,data/profiles/coxM.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,pfam_full_mafft,data/profiles/alignments/PF03450.full.stockholm.gz,500,19a12593e3e589e4dd6fa946be41837faeef5c09e983df776c21ff31ab6bb305
+CO,coxS,PF01799,data/profiles/coxS.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,pfam_full_mafft,data/profiles/alignments/PF01799.full.stockholm.gz,500,0a5c16b2f8acf9c15b92326c01fe7c77c43960c3340e57b1f9cc971ef55610bf
+CN,cydA,PF01654,data/profiles/cydA.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABJ9|CYDA_ECOLI,pfam_full_mafft,data/profiles/alignments/PF01654.full.stockholm.gz,500,c03217342149b202b3db4d4f31f76052a4bb618d2db382e87e598786d3b8b8bb
+CN,cydB,PF02322,data/profiles/cydB.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABK2|CYDB_ECOLI,pfam_full_mafft,data/profiles/alignments/PF02322.full.stockholm.gz,500,bb5e38e19fa40402259798a76589313faeda82136c8310d9dc9b11ca52a061bb
+CN,cydX,PF13456,data/profiles/cydX.hmm,data/seeds/cn_anchor_seeds.faa,sp|P56100|CYDX_ECOLI,pfam_full_mafft,data/profiles/alignments/PF13456.full.stockholm.gz,500,bdc7e1e9a37811bdf7bc925a06b5306dad835f93e4883aacd24010c0a7ebb121

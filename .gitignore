@@ -10,5 +10,6 @@ results/*
 !results/.gitkeep
 cache/
 data/external/
+data/profiles/alignments/
 databases/
 .snakemake/

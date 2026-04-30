@@ -7,6 +7,7 @@ import click
 import polars as pl
 
 from gasregnet.annotation.domains import annotate_domains
+from gasregnet.annotation.ecology import score_taxonomic_context_by_analyte
 from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.annotation.roles import (
     assign_sensor_roles,
@@ -184,7 +185,7 @@ def fetch_assets_command(
         click.echo(path)
 
 
-@app.command("build-profiles", help="Build HMM profiles from anchor seed FASTAs.")
+@app.command("build-profiles", help="Build HMM profiles from Pfam alignments.")
 @click.option(
     "--config",
     default=Path("configs"),
@@ -206,14 +207,18 @@ def fetch_assets_command(
     type=click.Path(path_type=Path),
     help="Profile manifest YAML output.",
 )
+@click.option("--source", type=click.Choice(["pfam", "seed"]), default="pfam")
+@click.option("--max-sequences", default=500, show_default=True, type=int)
 @click.option("--verbose", is_flag=True, help="Enable debug logs.")
 def build_profiles_command(
     config: Path,
     out_dir: Path,
     manifest_out: Path,
+    source: str,
+    max_sequences: int,
     verbose: bool,
 ) -> None:
-    """Build HMM profiles from configured anchor seed FASTAs."""
+    """Build HMM profiles from configured Pfam families."""
 
     configure_logging(verbose=verbose)
     from scripts.build_profiles import build_profiles
@@ -222,6 +227,8 @@ def build_profiles_command(
         config=config,
         out_dir=out_dir,
         manifest_out=manifest_out,
+        source=source,
+        max_sequences=max_sequences,
     )
     click.echo(f"wrote {manifest.height} profiles to {out_dir}")
     click.echo(manifest_out)
@@ -1084,6 +1091,7 @@ def score_command(
     cfg = load_config(config)
     loci = read_parquet(input_dir / "loci.parquet", LociSchema)
     genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
+    loci = score_taxonomic_context_by_analyte(loci, cfg.analytes, root=Path("."))
     scored_loci = score_loci(loci, cfg.scoring)
     candidates = score_candidates(scored_loci, genes, cfg.scoring)
     candidates = assign_phylogenetic_profile_scores(

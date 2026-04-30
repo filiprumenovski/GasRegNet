@@ -68,6 +68,22 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
         ).pl()
 
 
+def _all_protein_metadata(db: Path) -> pl.DataFrame:
+    with duckdb.connect(str(db), read_only=True) as connection:
+        return connection.execute(
+            """
+            select
+                proteins.protein_accession,
+                coalesce(features.locus_tag, '') as locus_tag,
+                coalesce(features.gene, '') as gene,
+                coalesce(features.product, proteins.description) as product,
+                proteins.sequence
+            from proteins
+            left join features using (protein_accession)
+            """,
+        ).pl()
+
+
 def _gene_symbol(description: str) -> str:
     for token in description.split():
         if token.startswith("GN="):
@@ -248,6 +264,51 @@ def _hits_for_family(
     return validate(frame, AnchorHitsSchema)
 
 
+def _seed_rescue_hits(
+    *,
+    dataset_name: str,
+    db: Path,
+    analyte: str,
+    anchor_family: str,
+    seeds_by_analyte: dict[str, dict[str, str]],
+    identity_threshold: float,
+    coverage_threshold: float,
+) -> pl.DataFrame:
+    metadata = _all_protein_metadata(db)
+    if metadata.is_empty():
+        return _empty_anchor_hits()
+    rows: list[dict[str, object]] = []
+    seed = seeds_by_analyte.get(analyte, {}).get(anchor_family, "")
+    for protein in metadata.iter_rows(named=True):
+        identity, coverage = _sequence_match(str(protein["sequence"]), seed)
+        if identity < identity_threshold or coverage < coverage_threshold:
+            continue
+        if not _passes_family_guard(protein, anchor_family):
+            continue
+        rows.append(
+            {
+                "dataset_name": dataset_name,
+                "analyte": analyte,
+                "anchor_family": anchor_family,
+                "protein_accession": str(protein["protein_accession"]),
+                "locus_tag": str(protein["locus_tag"]),
+                "gene": str(protein["gene"]),
+                "product": str(protein["product"]),
+                "bitscore": None,
+                "e_value": None,
+                "identity": identity,
+                "coverage": coverage,
+                "evidence_type": "seed_back_confirmed",
+            },
+        )
+    if not rows:
+        return _empty_anchor_hits()
+    return validate(
+        pl.DataFrame(rows, schema_overrides=ANCHOR_HITS_SCHEMA),
+        AnchorHitsSchema,
+    )
+
+
 def detect_anchors_profile(
     manifest: Path,
     *,
@@ -287,6 +348,28 @@ def detect_anchors_profile(
                 )
                 if not family_hits.is_empty():
                     frames.append(family_hits)
+                rescue_hits = _seed_rescue_hits(
+                    dataset_name=dataset_name,
+                    db=db,
+                    analyte=analyte.analyte,
+                    anchor_family=family.name,
+                    seeds_by_analyte=seeds_by_analyte,
+                    identity_threshold=0.95,
+                    coverage_threshold=0.95,
+                )
+                if not rescue_hits.is_empty():
+                    frames.append(rescue_hits)
     if not frames:
         return _empty_anchor_hits()
-    return validate(pl.concat(frames, how="vertical"), AnchorHitsSchema)
+    return validate(
+        pl.concat(frames, how="vertical").unique(
+            subset=[
+                "dataset_name",
+                "analyte",
+                "anchor_family",
+                "protein_accession",
+                "locus_tag",
+            ],
+        ),
+        AnchorHitsSchema,
+    )

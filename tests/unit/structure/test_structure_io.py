@@ -82,6 +82,29 @@ def test_residue_mapping_by_order_pairs_ca_atoms(tmp_path: Path) -> None:
     assert mapping["homolog_residue_number"].to_list() == [50, 51]
 
 
+def test_residue_mapping_by_order_aligns_through_insertions(tmp_path: Path) -> None:
+    model = tmp_path / "model.pdb"
+    homolog = tmp_path / "homolog.pdb"
+    model.write_text(
+        _atom_line(1, "MET", 10)
+        + _atom_line(2, "ALA", 11)
+        + _atom_line(3, "GLY", 12),
+        encoding="utf-8",
+    )
+    homolog.write_text(
+        _atom_line(1, "MET", 50)
+        + _atom_line(2, "SER", 51)
+        + _atom_line(3, "ALA", 52)
+        + _atom_line(4, "GLY", 53),
+        encoding="utf-8",
+    )
+
+    mapping = residue_mapping_by_order(model, homolog)
+
+    assert mapping["model_residue_number"].to_list() == [10, 11, 12]
+    assert mapping["homolog_residue_number"].to_list() == [50, 52, 53]
+
+
 def test_structure_parsers_reject_missing_files(tmp_path: Path) -> None:
     with pytest.raises(MissingInputError):
         read_plddt_from_pdb(tmp_path / "missing.pdb")

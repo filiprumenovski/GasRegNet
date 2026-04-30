@@ -12,6 +12,7 @@ def test_build_profiles_writes_loadable_hmms(tmp_path: Path) -> None:
         config=Path("configs"),
         out_dir=tmp_path / "profiles",
         manifest_out=tmp_path / "profiles.yaml",
+        source="seed",
     )
 
     assert manifest.height >= 1
@@ -22,3 +23,4 @@ def test_build_profiles_writes_loadable_hmms(tmp_path: Path) -> None:
     assert (tmp_path / "profiles.yaml").exists()
     assert (tmp_path / "profiles.csv").exists()
     assert manifest["sha256"].str.len_chars().min() == 64
+    assert manifest["nseq"].min() == 1

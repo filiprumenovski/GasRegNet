@@ -12,6 +12,7 @@ import yaml  # type: ignore[import-untyped]
 
 from gasregnet.io.fasta import read_fasta
 from gasregnet.io.gff import read_gff3
+from gasregnet.neighborhoods.operons import anchor_operon_integrity
 from gasregnet.schemas import AnchorHitsSchema, GenesSchema, LociSchema, validate
 
 PROTEIN_SCHEMA = {
@@ -833,4 +834,11 @@ def extract_refseq_neighborhoods(
         gene_rows,
         schema_overrides=GENES_OUTPUT_SCHEMA,
     )
+    integrity = anchor_operon_integrity(genes)
+    if not integrity.is_empty():
+        loci = (
+            loci.drop("operon_integrity_score")
+            .join(integrity, on="locus_id", how="left")
+            .with_columns(pl.col("operon_integrity_score").fill_null(0.0))
+        )
     return validate(loci, LociSchema), validate(genes, GenesSchema)

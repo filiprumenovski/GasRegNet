@@ -7,6 +7,7 @@ from pathlib import Path
 
 import polars as pl
 
+from gasregnet.annotation.ecology import score_taxonomic_context_by_analyte
 from gasregnet.annotation.roles import (
     assign_sensor_roles,
     build_sensor_regulator_pairs,
@@ -151,6 +152,11 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
     resolve_and_dump(config, out_dir)
 
     loci, genes = retrieve_from_efi_sqlite(sqlite, ["CO", "CN"])
+    loci = score_taxonomic_context_by_analyte(
+        loci,
+        config.analytes,
+        root=Path("."),
+    )
     genes = assign_sensor_roles(
         genes,
         regulator_families=config.regulator_families,
