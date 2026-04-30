@@ -84,6 +84,77 @@ def test_report_command_writes_artifacts(tmp_path: Path) -> None:
     assert (report / "captions" / "figure_4_chemistry_partition.md").exists()
 
 
+def test_stage_commands_write_scored_enrichment_and_archetypes(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    annotated = tmp_path / "annotated"
+    scored = tmp_path / "scored"
+    enriched = tmp_path / "enriched"
+    archetypes = tmp_path / "archetypes"
+    run_sqlite_demo(
+        out_dir=source,
+        config_path=Path("configs/headline.yaml"),
+        sqlite_path=tmp_path / "mini.sqlite",
+    )
+
+    annotate_result = runner.invoke(
+        app,
+        [
+            "annotate",
+            "--neighborhoods",
+            str(source),
+            "--config",
+            "configs",
+            "--out",
+            str(annotated),
+        ],
+    )
+    score_result = runner.invoke(
+        app,
+        [
+            "score",
+            "--neighborhoods",
+            str(annotated),
+            "--config",
+            "configs",
+            "--out",
+            str(scored),
+        ],
+    )
+    enrich_result = runner.invoke(
+        app,
+        [
+            "enrich",
+            "--scored",
+            str(scored),
+            "--config",
+            "configs",
+            "--out",
+            str(enriched),
+        ],
+    )
+    archetypes_result = runner.invoke(
+        app,
+        [
+            "archetypes",
+            "--scored",
+            str(scored),
+            "--config",
+            "configs",
+            "--out",
+            str(archetypes),
+        ],
+    )
+
+    assert annotate_result.exit_code == 0
+    assert score_result.exit_code == 0
+    assert enrich_result.exit_code == 0
+    assert archetypes_result.exit_code == 0
+    assert (annotated / "intermediate" / "genes.parquet").exists()
+    assert (scored / "intermediate" / "candidates.parquet").exists()
+    assert (enriched / "intermediate" / "enrichment.parquet").exists()
+    assert (archetypes / "intermediate" / "archetypes.parquet").exists()
+
+
 def test_repro_command_invokes_snakemake(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -120,8 +191,41 @@ def test_repro_command_invokes_snakemake(
     assert f"out_dir={tmp_path / 'headline'}" in calls[0]
 
 
-def test_placeholder_command_exits_clearly() -> None:
-    result = runner.invoke(app, ["annotate"])
+def test_annotate_command_accepts_optional_annotation_tables(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    out = tmp_path / "annotated"
+    pfam = tmp_path / "pfam.csv"
+    interpro = tmp_path / "interpro.csv"
+    run_sqlite_demo(
+        out_dir=source,
+        config_path=Path("configs/headline.yaml"),
+        sqlite_path=tmp_path / "mini.sqlite",
+    )
+    pfam.write_text(
+        "gene_accession,pfam_id,pfam_description\nREG_UP,PF01047,HTH\n",
+        encoding="utf-8",
+    )
+    interpro.write_text(
+        "gene_accession,interpro_id,interpro_description\n",
+        encoding="utf-8",
+    )
 
-    assert result.exit_code == 2
-    assert "not implemented" in result.output
+    result = runner.invoke(
+        app,
+        [
+            "annotate",
+            "--neighborhoods",
+            str(source),
+            "--config",
+            "configs",
+            "--out",
+            str(out),
+            "--pfam-table",
+            str(pfam),
+            "--interpro-table",
+            str(interpro),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (out / "intermediate" / "genes.parquet").exists()

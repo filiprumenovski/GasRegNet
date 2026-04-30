@@ -6,6 +6,9 @@ from pathlib import Path
 import click
 import polars as pl
 
+from gasregnet.annotation.domains import annotate_domains
+from gasregnet.annotation.regulators import classify_regulators
+from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
@@ -29,6 +32,9 @@ from gasregnet.schemas import (
     LociSchema,
     RegulatorCandidatesSchema,
 )
+from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.enrichment import run_enrichment
+from gasregnet.scoring.loci import score_loci
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
 
 
@@ -66,8 +72,9 @@ def _write_metadata(
     write_manifest(manifest, out_dir)
 
 
-def _placeholder(command: str) -> None:
-    raise click.UsageError(f"{command} is not implemented in this scaffold yet.")
+def _intermediate_dir(path: Path) -> Path:
+    nested = path / "intermediate"
+    return nested if nested.exists() else path
 
 
 def _benchmark_from_candidates(candidates_path: Path) -> Path | None:
@@ -248,31 +255,293 @@ def build_benchmark_command(
 
 
 @app.command("annotate", help="Annotate retrieved neighborhoods.")
-def annotate_command() -> None:
+@click.option(
+    "--neighborhoods",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing loci.parquet and genes.parquet.",
+)
+@click.option(
+    "--config",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Config directory or YAML.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory.",
+)
+@click.option(
+    "--pfam-table",
+    type=click.Path(path_type=Path),
+    help="Optional Pfam annotation CSV.",
+)
+@click.option(
+    "--interpro-table",
+    type=click.Path(path_type=Path),
+    help="Optional InterPro annotation CSV.",
+)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def annotate_command(
+    neighborhoods: Path,
+    config: Path,
+    out: Path,
+    pfam_table: Path | None,
+    interpro_table: Path | None,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Annotate retrieved neighborhoods."""
 
-    _placeholder("annotate")
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    input_dir = _intermediate_dir(neighborhoods)
+    cfg = load_config(config)
+    loci = read_parquet(input_dir / "loci.parquet", LociSchema)
+    genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
+    if pfam_table is not None or interpro_table is not None:
+        pfam = (
+            pl.read_csv(pfam_table)
+            if pfam_table is not None
+            else pl.DataFrame(
+                schema={
+                    "gene_accession": pl.Utf8,
+                    "pfam_id": pl.Utf8,
+                    "pfam_description": pl.Utf8,
+                },
+            )
+        )
+        interpro = (
+            pl.read_csv(interpro_table)
+            if interpro_table is not None
+            else pl.DataFrame(
+                schema={
+                    "gene_accession": pl.Utf8,
+                    "interpro_id": pl.Utf8,
+                    "interpro_description": pl.Utf8,
+                },
+            )
+        )
+        genes = annotate_domains(genes, pfam, interpro)
+    genes = classify_regulators(genes, cfg.regulator_families)
+    write_parquet(loci, out / "intermediate" / "loci.parquet", LociSchema)
+    write_parquet(genes, out / "intermediate" / "genes.parquet", GenesSchema)
+    resolve_and_dump(cfg, out)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="annotate",
+            config_paths=_config_hash_paths(config),
+            input_paths={
+                "loci": input_dir / "loci.parquet",
+                "genes": input_dir / "genes.parquet",
+            },
+        ),
+        out,
+    )
+    click.echo(f"wrote annotated outputs to {out}")
 
 
 @app.command("score", help="Score annotated neighborhoods and candidate regulators.")
-def score_command() -> None:
+@click.option(
+    "--neighborhoods",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing loci.parquet and genes.parquet.",
+)
+@click.option(
+    "--config",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Config directory or YAML.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory.",
+)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def score_command(
+    neighborhoods: Path,
+    config: Path,
+    out: Path,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Score annotated neighborhoods and candidate regulators."""
 
-    _placeholder("score")
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    input_dir = _intermediate_dir(neighborhoods)
+    cfg = load_config(config)
+    loci = read_parquet(input_dir / "loci.parquet", LociSchema)
+    genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
+    scored_loci = score_loci(loci, cfg.scoring)
+    candidates = score_candidates(scored_loci, genes, cfg.scoring)
+    write_parquet(
+        scored_loci.select(list(LociSchema.columns.keys())),
+        out / "intermediate" / "loci.parquet",
+        LociSchema,
+    )
+    write_parquet(genes, out / "intermediate" / "genes.parquet", GenesSchema)
+    write_parquet(
+        candidates,
+        out / "intermediate" / "candidates.parquet",
+        RegulatorCandidatesSchema,
+    )
+    resolve_and_dump(cfg, out)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="score",
+            config_paths=_config_hash_paths(config),
+            input_paths={
+                "loci": input_dir / "loci.parquet",
+                "genes": input_dir / "genes.parquet",
+            },
+        ),
+        out,
+    )
+    click.echo(f"wrote scored outputs to {out}")
 
 
 @app.command("enrich", help="Run matched-control enrichment tests.")
-def enrich_command() -> None:
+@click.option(
+    "--scored",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing loci.parquet and genes.parquet.",
+)
+@click.option(
+    "--config",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Config directory or YAML.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory.",
+)
+@click.option("--case-analyte", default="CO", show_default=True)
+@click.option("--control-analyte", default="CN", show_default=True)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def enrich_command(
+    scored: Path,
+    config: Path,
+    out: Path,
+    case_analyte: str,
+    control_analyte: str,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Run matched-control enrichment tests."""
 
-    _placeholder("enrich")
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    input_dir = _intermediate_dir(scored)
+    cfg = load_config(config)
+    loci = read_parquet(input_dir / "loci.parquet", LociSchema)
+    genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
+    case_loci = loci.filter(pl.col("analyte") == case_analyte)["locus_id"].to_list()
+    control_loci = loci.filter(pl.col("analyte") == control_analyte)[
+        "locus_id"
+    ].to_list()
+    enrichment = run_enrichment(
+        genes.filter(pl.col("locus_id").is_in(case_loci)),
+        genes.filter(pl.col("locus_id").is_in(control_loci)),
+        analyte=case_analyte,
+        case_definition=f"{case_analyte} scored loci",
+        control_definition=f"{control_analyte} scored loci",
+        alpha=cfg.scoring.enrichment.alpha,
+    )
+    write_parquet(
+        enrichment,
+        out / "intermediate" / "enrichment.parquet",
+        EnrichmentResultsSchema,
+    )
+    resolve_and_dump(cfg, out)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="enrich",
+            config_paths=_config_hash_paths(config),
+            input_paths={
+                "loci": input_dir / "loci.parquet",
+                "genes": input_dir / "genes.parquet",
+            },
+        ),
+        out,
+    )
+    click.echo(f"wrote enrichment outputs to {out}")
 
 
 @app.command("archetypes", help="Cluster neighborhoods into recurrent archetypes.")
-def archetypes_command() -> None:
+@click.option(
+    "--scored",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing loci.parquet and candidates.parquet.",
+)
+@click.option(
+    "--config",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Config directory or YAML.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory.",
+)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def archetypes_command(
+    scored: Path,
+    config: Path,
+    out: Path,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Cluster scored neighborhoods into recurrent archetypes."""
 
-    _placeholder("archetypes")
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    input_dir = _intermediate_dir(scored)
+    cfg = load_config(config)
+    loci = read_parquet(input_dir / "loci.parquet", LociSchema)
+    candidates = read_parquet(
+        input_dir / "candidates.parquet",
+        RegulatorCandidatesSchema,
+    )
+    archetypes = cluster_archetypes(loci, candidates)
+    write_parquet(
+        archetypes,
+        out / "intermediate" / "archetypes.parquet",
+        ArchetypesSchema,
+    )
+    resolve_and_dump(cfg, out)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="archetypes",
+            config_paths=_config_hash_paths(config),
+            input_paths={
+                "loci": input_dir / "loci.parquet",
+                "candidates": input_dir / "candidates.parquet",
+            },
+        ),
+        out,
+    )
+    click.echo(f"wrote archetype outputs to {out}")
 
 
 @app.command("report", help="Build publication tables, figures, and captions.")
