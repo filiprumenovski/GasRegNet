@@ -30,11 +30,7 @@ def _group_annotations(
     *,
     id_column: str,
     description_column: str,
-) -> dict[str, tuple[list[str], list[str]]]:
-    grouped: dict[str, tuple[list[str], list[str]]] = {}
-    if table.is_empty():
-        return grouped
-
+) -> pl.DataFrame:
     required = {"gene_accession", id_column, description_column}
     missing = required - set(table.columns)
     if missing:
@@ -42,16 +38,33 @@ def _group_annotations(
         msg = f"annotation table is missing column(s): {missing_text}"
         raise ValueError(msg)
 
-    for row in table.iter_rows(named=True):
-        gene_accession = str(row["gene_accession"])
-        ids, descriptions = grouped.setdefault(gene_accession, ([], []))
-        annotation_id = row[id_column]
-        description = row[description_column]
-        if annotation_id is not None and str(annotation_id) not in ids:
-            ids.append(str(annotation_id))
-        if description is not None and str(description) not in descriptions:
-            descriptions.append(str(description))
-    return grouped
+    if table.is_empty():
+        return pl.DataFrame(
+            schema={
+                "gene_accession": pl.Utf8,
+                f"{id_column}s": pl.List(pl.Utf8),
+                f"{description_column}s": pl.List(pl.Utf8),
+            },
+        )
+
+    return (
+        table.select(
+            pl.col("gene_accession").cast(pl.Utf8),
+            pl.col(id_column).cast(pl.Utf8),
+            pl.col(description_column).cast(pl.Utf8),
+        )
+        .group_by("gene_accession", maintain_order=True)
+        .agg(
+            pl.col(id_column)
+            .drop_nulls()
+            .unique(maintain_order=True)
+            .alias(f"{id_column}s"),
+            pl.col(description_column)
+            .drop_nulls()
+            .unique(maintain_order=True)
+            .alias(f"{description_column}s"),
+        )
+    )
 
 
 def annotate_domains(
@@ -72,25 +85,33 @@ def annotate_domains(
         description_column="interpro_description",
     )
 
-    rows: list[dict[str, object]] = []
-    unannotated_by_locus: dict[str, int] = {}
-    for row in genes.iter_rows(named=True):
-        gene_accession = str(row["gene_accession"])
-        pfam_ids, pfam_descriptions = pfam.get(gene_accession, ([], []))
-        interpro_ids, interpro_descriptions = interpro.get(gene_accession, ([], []))
-        updated = dict(row)
-        updated["pfam_ids"] = pfam_ids
-        updated["pfam_descriptions"] = pfam_descriptions
-        updated["interpro_ids"] = interpro_ids
-        updated["interpro_descriptions"] = interpro_descriptions
-        if not pfam_ids and not interpro_ids:
-            locus_id = str(row["locus_id"])
-            unannotated_by_locus[locus_id] = unannotated_by_locus.get(locus_id, 0) + 1
-        rows.append(updated)
-
-    log.info("annotated domains", unannotated_by_locus=unannotated_by_locus)
-    annotated = pl.DataFrame(
-        rows,
-        schema_overrides=GENES_SCHEMA_OVERRIDES,
+    annotated = genes.drop(
+        [
+            "pfam_ids",
+            "pfam_descriptions",
+            "interpro_ids",
+            "interpro_descriptions",
+        ],
+    ).join(pfam, on="gene_accession", how="left").join(
+        interpro,
+        on="gene_accession",
+        how="left",
     )
+    empty_list = pl.lit([], dtype=pl.List(pl.Utf8))
+    annotated = annotated.with_columns(
+        pl.col("pfam_ids").fill_null(empty_list),
+        pl.col("pfam_descriptions").fill_null(empty_list),
+        pl.col("interpro_ids").fill_null(empty_list),
+        pl.col("interpro_descriptions").fill_null(empty_list),
+    )
+    unannotated_by_locus = dict(
+        annotated.filter(
+            (pl.col("pfam_ids").list.len() == 0)
+            & (pl.col("interpro_ids").list.len() == 0),
+        )
+        .group_by("locus_id", maintain_order=True)
+        .len()
+        .iter_rows(),
+    )
+    log.info("annotated domains", unannotated_by_locus=unannotated_by_locus)
     return validate(annotated, GenesSchema)

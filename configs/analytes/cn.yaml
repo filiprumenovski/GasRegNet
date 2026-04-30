@@ -1,5 +1,5 @@
 analyte: CN
-display_name: "hydrogen cyanide"
+display_name: "cyanide-resistant respiration control"
 anchor_seeds: data/seeds/cn_anchor_seeds.faa
 anchor_families:
   - name: cydA
@@ -14,7 +14,7 @@ anchor_families:
 window_genes: 10
 known_organisms_table: data/references/known_cn_organisms.csv
 expected_sensory_chemistry:
-  - cysteine_rich
+  - cysteine_metal
   - flavin
   - heme
 seed: 20260429

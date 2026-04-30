@@ -4,6 +4,8 @@ import gzip
 from pathlib import Path
 
 import duckdb
+import polars as pl
+import pytest
 
 from gasregnet.datasets.refseq import (
     detect_refseq_anchor_hits,
@@ -176,3 +178,84 @@ targets:
     assert genes.height == 3
     assert genes.filter(genes["is_anchor"])["gene_accession"].item() == "NP_000011.1"
     assert genes["relative_index"].to_list() == [-1, 0, 1]
+
+
+def test_extract_refseq_neighborhoods_batches_catalog_connections(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    protein_faa = tmp_path / "proteins.faa.gz"
+    with gzip.open(protein_faa, "wt", encoding="utf-8") as handle:
+        handle.write(
+            ">NP_000020.1 cytochrome bd subunit\nMAGATA\n"
+            ">NP_000021.1 carbon monoxide dehydrogenase\nMAGATA\n",
+        )
+    gff = tmp_path / "genome.gff.gz"
+    with gzip.open(gff, "wt", encoding="utf-8") as handle:
+        handle.write(
+            "##gff-version 3\n"
+            "ctg\tRefSeq\tCDS\t10\t99\t.\t+\t0\t"
+            "ID=cds-NP_000020.1;locus_tag=GRN_0020;protein_id=NP_000020.1;"
+            "gene=cydA;product=cytochrome%20bd-I%20subunit%201\n"
+            "ctg\tRefSeq\tCDS\t110\t199\t.\t+\t0\t"
+            "ID=cds-NP_000021.1;locus_tag=GRN_0021;protein_id=NP_000021.1;"
+            "gene=coxL;product=carbon%20monoxide%20dehydrogenase\n",
+        )
+    manifest = tmp_path / "catalogs.yaml"
+    manifest.write_text(
+        """
+catalogs:
+  - dataset_name: mini
+    protein_faa: proteins.faa.gz
+    gff: genome.gff.gz
+    out_db: mini.duckdb
+""",
+        encoding="utf-8",
+    )
+    index_refseq_corpus(manifest, root=tmp_path)
+    anchor_hits = pl.DataFrame(
+        data={
+            "dataset_name": ["mini", "mini"],
+            "analyte": ["CN", "CO"],
+            "anchor_family": ["cydA", "coxL"],
+            "protein_accession": ["NP_000020.1", "NP_000021.1"],
+            "locus_tag": ["GRN_0020", "GRN_0021"],
+            "gene": ["cydA", "coxL"],
+            "product": [
+                "cytochrome bd-I subunit 1",
+                "carbon monoxide dehydrogenase",
+            ],
+            "bitscore": [None, None],
+            "e_value": [None, None],
+            "identity": [None, None],
+            "coverage": [None, None],
+            "evidence_type": ["term_scan", "term_scan"],
+        },
+        schema_overrides={
+            "bitscore": pl.Float64,
+            "e_value": pl.Float64,
+            "identity": pl.Float64,
+            "coverage": pl.Float64,
+        },
+    )
+    original_connect = duckdb.connect
+    connect_calls = 0
+
+    def counting_connect(*args: object, **kwargs: object) -> duckdb.DuckDBPyConnection:
+        nonlocal connect_calls
+        connect_calls += 1
+        return original_connect(*args, **kwargs)
+
+    monkeypatch.setattr("gasregnet.datasets.refseq.duckdb.connect", counting_connect)
+
+    loci, genes = extract_refseq_neighborhoods(
+        anchor_hits,
+        manifest,
+        root=tmp_path,
+        window_genes=0,
+    )
+
+    assert connect_calls == 1
+    assert loci.height == 2
+    assert genes.height == 2
+    assert genes["relative_index"].to_list() == [0, 0]

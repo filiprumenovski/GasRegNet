@@ -176,6 +176,22 @@ def _passes_family_guard(row: dict[str, object], anchor_family: str) -> bool:
     return any(term in haystack for term in _family_guard_terms(anchor_family))
 
 
+def _family_guard_expression(anchor_family: str) -> pl.Expr:
+    haystack = pl.concat_str(
+        [
+            pl.col("protein_accession").fill_null(""),
+            pl.col("locus_tag").fill_null(""),
+            pl.col("gene").fill_null(""),
+            pl.col("product").fill_null(""),
+        ],
+        separator=" ",
+    ).str.to_lowercase()
+    expression = pl.lit(False)
+    for term in _family_guard_terms(anchor_family):
+        expression = expression | haystack.str.contains(term, literal=True)
+    return expression
+
+
 def _hits_for_family(
     *,
     dataset_name: str,
@@ -220,14 +236,7 @@ def _hits_for_family(
                 pl.col("evalue").alias("e_value"),
             ],
         )
-        .filter(
-            pl.struct(
-                ["protein_accession", "locus_tag", "gene", "product"],
-            ).map_elements(
-                lambda row: _passes_family_guard(row, anchor_family),
-                return_dtype=pl.Boolean,
-            ),
-        )
+        .filter(_family_guard_expression(anchor_family))
         .with_columns(
             pl.struct(["sequence"])
             .map_elements(

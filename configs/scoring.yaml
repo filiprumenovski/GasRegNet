@@ -11,12 +11,16 @@ candidate_score_weights:
   regulator_domain: 1.5
   sensory_domain: 2.0
   proximity: 1.0
-  orientation: 0.25
   archetype_conservation: 1.5
   enrichment: 2.0
   taxonomic_breadth: 0.5
   phylogenetic_profile: 1.25
-  structural_plausibility: 1.5
+  structural_plausibility: 0.0
+  operator_motif: 0.0
+  embedding_similarity: 0.0
+  foldseek_similarity: 0.0
+  paired_sensor_evidence: 0.0
+  conservation_across_taxa: 0.0
 
 confidence_thresholds:
   high: 6.0

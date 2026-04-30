@@ -1,4 +1,3 @@
-benchmark_csv: data/benchmarks/regulators_v2.csv
 regulator_benchmark_csv: data/benchmarks/regulators_v2.csv
 anchor_benchmark_csv: data/benchmarks/anchors_v1.csv
 positive_recall_threshold: 0.80

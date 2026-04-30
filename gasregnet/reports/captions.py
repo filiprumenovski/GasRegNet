@@ -108,11 +108,11 @@ def figure_4_chemistry_partition_caption(enrichment: pl.DataFrame) -> str:
 
 
 def figure_5_candidate_ranking_caption(candidates: pl.DataFrame) -> str:
-    """Caption for operon-level regulation posterior figure."""
+    """Caption for operon-level regulation score-band figure."""
 
-    if "regulation_posterior" in candidates.columns:
+    if "regulation_logit_score" in candidates.columns:
         high_confidence = candidates.filter(
-            pl.col("regulation_posterior") >= 0.8,
+            pl.col("regulation_logit_score") >= 0.8,
         ).height
     else:
         high_confidence = (
@@ -122,24 +122,24 @@ def figure_5_candidate_ranking_caption(candidates: pl.DataFrame) -> str:
         )
     if candidates.is_empty():
         return (
-            "GasRegNet reports 0 high-posterior operon-level regulation "
+            "GasRegNet reports 0 high-score operon-level regulation "
             "hypotheses in this run."
         )
     sort_column = (
-        "regulation_posterior"
-        if "regulation_posterior" in candidates.columns
+        "regulation_logit_score"
+        if "regulation_logit_score" in candidates.columns
         else "candidate_score"
     )
     top = candidates.sort(sort_column, descending=True).row(0, named=True)
-    if sort_column == "regulation_posterior":
+    if sort_column == "regulation_logit_score":
         return (
-            "GasRegNet reports operon-level posterior probabilities for "
+            "GasRegNet reports deterministic operon-level regulation scores for "
             "candidate regulation hypotheses, with "
-            f"{high_confidence} candidates at P(regulation)>=0.80; top posterior "
+            f"{high_confidence} candidates at logit score >=0.80; top score "
             f"is {top['candidate_id']} in {top['organism']} "
-            f"(P={_float_text(top['regulation_posterior'])}, 94% HDI "
-            f"[{_float_text(top['regulation_posterior_hdi_low'])}, "
-            f"{_float_text(top['regulation_posterior_hdi_high'])}])."
+            f"({_float_text(top['regulation_logit_score'])}, 94% score band "
+            f"[{_float_text(top['score_band_low'])}, "
+            f"{_float_text(top['score_band_high'])}])."
         )
     return (
         "GasRegNet nominates "

@@ -15,10 +15,6 @@ regulator_families:
     pfam_required: ["PF00027"]
     pfam_optional: ["PF00325"]
     notes: "Includes CooA, FNR, and ANR; chemistry resolved by sensory evidence."
-  - family: FNR/CRP
-    class: one_component
-    pfam_required: ["PF00027"]
-    pfam_optional: ["PF00325"]
   - family: LysR
     class: one_component
     pfam_required: ["PF00126"]

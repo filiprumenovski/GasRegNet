@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import math
-from typing import Any, cast
+from typing import Any
 
 import polars as pl
 
 from gasregnet.config import ScoringConfig
 from gasregnet.schemas import RegulatorCandidatesSchema, validate
-from gasregnet.scoring.candidates import CANDIDATE_SCHEMA
+from gasregnet.scoring.candidates import (
+    CANDIDATE_SCHEMA,
+    candidate_score_from_components,
+)
 
 
 def _entropy(probability: float) -> float:
@@ -46,29 +49,6 @@ def _mutual_information(x: list[int], y: list[int]) -> float:
     if normalizer == 0.0:
         return 0.0
     return max(0.0, min(1.0, mi / normalizer))
-
-
-def _score_total(row: dict[str, object], scoring: ScoringConfig) -> float:
-    weights = scoring.candidate_score_weights
-    structural_score = row["structural_plausibility_score"]
-    structural_component = (
-        0.0 if structural_score is None else float(cast(float, structural_score))
-    )
-    return (
-        float(cast(float, row["locus_score"])) * weights["locus"]
-        + float(cast(float, row["regulator_domain_score"]))
-        * weights["regulator_domain"]
-        + float(cast(float, row["sensory_domain_score"])) * weights["sensory_domain"]
-        + float(cast(float, row["proximity_score"])) * weights["proximity"]
-        + float(cast(float, row["archetype_conservation_score"]))
-        * weights["archetype_conservation"]
-        + float(cast(float, row["enrichment_score"])) * weights["enrichment"]
-        + float(cast(float, row["taxonomic_breadth_score"]))
-        * weights.get("taxonomic_breadth", 0.0)
-        + float(cast(float, row.get("phylogenetic_profile_score", 0.0)))
-        * weights.get("phylogenetic_profile", 0.0)
-        + structural_component * weights["structural_plausibility"]
-    )
 
 
 def assign_phylogenetic_profile_scores(
@@ -150,7 +130,10 @@ def assign_phylogenetic_profile_scores(
             0.0,
         )
         if scoring is not None:
-            updated["candidate_score"] = _score_total(updated, scoring)
+            updated["candidate_score"] = candidate_score_from_components(
+                updated,
+                scoring,
+            )
         rows.append(updated)
 
     return validate(

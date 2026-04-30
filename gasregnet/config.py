@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 import yaml  # type: ignore[import-untyped]
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from gasregnet.errors import ConfigError
 
@@ -15,6 +15,31 @@ class StrictModel(BaseModel):
     """Base model that rejects unknown config fields."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+Chemistry = Literal[
+    "heme",
+    "iron_sulfur_4Fe4S",
+    "iron_sulfur_2Fe2S",
+    "flavin",
+    "globin",
+    "cnmp",
+    "cysteine_metal",
+    "redox_quinone",
+    "metal_zinc",
+    "none",
+]
+
+RegulatorClass = Literal[
+    "one_component",
+    "two_component_rr",
+    "two_component_hk",
+    "sigma54_activator",
+    "sigma",
+    "anti_sigma",
+    "antiterminator",
+    "none",
+]
 
 
 class AnchorFamilyConfig(StrictModel):
@@ -31,7 +56,7 @@ class AnalyteConfig(StrictModel):
     anchor_families: list[AnchorFamilyConfig]
     window_genes: int = Field(gt=0)
     known_organisms_table: Path
-    expected_sensory_chemistry: list[str]
+    expected_sensory_chemistry: list[Chemistry]
     seed: int
 
 
@@ -74,7 +99,7 @@ class ScoringConfig(StrictModel):
 
 class RegulatorFamilyEntry(StrictModel):
     family: str
-    regulator_class: str = Field(alias="class")
+    regulator_class: RegulatorClass = Field(alias="class")
     pfam_required: list[str]
     pfam_optional: list[str] = Field(default_factory=list)
     notes: str = ""
@@ -85,24 +110,13 @@ class SensoryDomainEntry(StrictModel):
     domain: str
     pfam_id: str
     role: Literal["sensor", "transducer", "effector"] = "sensor"
-    chemistry: Literal[
-        "heme",
-        "iron_sulfur_4Fe4S",
-        "iron_sulfur_2Fe2S",
-        "flavin",
-        "globin",
-        "cnmp",
-        "cysteine_metal",
-        "redox_quinone",
-        "metal_zinc",
-        "none",
-    ]
+    chemistry: Chemistry
     notes: str = ""
 
 
 class SensoryRescoreConfig(StrictModel):
     domain: str
-    chemistry: str
+    chemistry: Chemistry
 
 
 class SensoryPairedEvidenceRule(StrictModel):
@@ -116,12 +130,25 @@ class SensoryPairedEvidenceRule(StrictModel):
 
 
 class BenchmarkConfig(StrictModel):
-    benchmark_csv: Path
+    benchmark_csv: Path | None = None
     regulator_benchmark_csv: Path | None = None
     anchor_benchmark_csv: Path | None = None
     positive_recall_threshold: float = Field(ge=0.0, le=1.0)
     negative_false_positive_threshold: float = Field(ge=0.0, le=1.0)
     report_per_family: bool
+
+    @model_validator(mode="after")
+    def require_benchmark_path(self) -> Self:
+        if (
+            self.benchmark_csv is None
+            and self.regulator_benchmark_csv is None
+            and self.anchor_benchmark_csv is None
+        ):
+            raise ValueError(
+                "at least one benchmark path is required "
+                "(benchmark_csv, regulator_benchmark_csv, or anchor_benchmark_csv)",
+            )
+        return self
 
 
 class GasRegNetConfig(StrictModel):

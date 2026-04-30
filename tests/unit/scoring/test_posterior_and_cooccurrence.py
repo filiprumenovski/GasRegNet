@@ -8,7 +8,7 @@ from gasregnet.config import load_config
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.loci import score_loci
-from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
+from gasregnet.scoring.posterior import assign_operon_regulation_score_bands
 from gasregnet.simulation.synthetic_truth import simulate_synthetic_truth_corpus
 from tests.unit.test_schemas import candidates_frame, loci_frame
 
@@ -60,7 +60,7 @@ def test_phylogenetic_profile_cooccurrence_scores_mutual_information() -> None:
     assert scored["candidate_score"].min() > candidates["candidate_score"].min()
 
 
-def test_operon_posterior_adds_ordered_94_percent_hdis() -> None:
+def test_operon_score_band_adds_ordered_94_percent_bands() -> None:
     candidates = pl.concat(
         [
             candidates_frame().with_columns(pl.lit(20.0).alias("candidate_score")),
@@ -71,18 +71,18 @@ def test_operon_posterior_adds_ordered_94_percent_hdis() -> None:
         ],
     )
 
-    posterior = assign_operon_regulation_posteriors(candidates)
-    top = posterior.sort("regulation_posterior", descending=True).row(0, named=True)
-    bottom = posterior.sort("regulation_posterior").row(0, named=True)
+    scored = assign_operon_regulation_score_bands(candidates)
+    top = scored.sort("regulation_logit_score", descending=True).row(0, named=True)
+    bottom = scored.sort("regulation_logit_score").row(0, named=True)
 
     assert top["candidate_id"] == "cand1"
-    assert top["regulation_posterior"] > bottom["regulation_posterior"]
+    assert top["regulation_logit_score"] > bottom["regulation_logit_score"]
     assert (
-        top["regulation_posterior_hdi_low"]
-        < top["regulation_posterior"]
-        < top["regulation_posterior_hdi_high"]
+        top["score_band_low"]
+        < top["regulation_logit_score"]
+        < top["score_band_high"]
     )
-    assert top["posterior_evidence_model"] == "baseline_logit_beta_hdi_94"
+    assert top["score_band_model"] == "baseline_logit_beta_score_band_94"
 
 
 def test_synthetic_truth_corpus_recovers_planted_regulators_above_decoys() -> None:
@@ -101,7 +101,7 @@ def test_synthetic_truth_corpus_recovers_planted_regulators_above_decoys() -> No
         loci,
         scoring=config.scoring,
     )
-    candidates = assign_operon_regulation_posteriors(candidates)
+    candidates = assign_operon_regulation_score_bands(candidates)
     truth = synthetic.ground_truth.filter(pl.col("is_true_regulator"))
     recovered = candidates.join(
         truth.select(["gene_accession", "is_true_regulator"]),
@@ -111,4 +111,4 @@ def test_synthetic_truth_corpus_recovers_planted_regulators_above_decoys() -> No
 
     assert recovered.height == truth.height
     assert recovered["is_true_regulator"].all()
-    assert recovered["regulation_posterior"].min() > 0.4
+    assert recovered["regulation_logit_score"].min() > 0.4

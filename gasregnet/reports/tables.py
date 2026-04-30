@@ -14,7 +14,7 @@ TABLE_SPECS = {
         "organism",
         "hit",
         "rank",
-        "regulation_posterior",
+        "regulation_logit_score",
         "candidate_score",
     ],
     "T2_top30_co_candidates": [
@@ -22,21 +22,21 @@ TABLE_SPECS = {
         "organism",
         "regulator_class",
         "sensory_domains",
-        "regulation_posterior",
-        "regulation_posterior_hdi_low",
-        "regulation_posterior_hdi_high",
+        "regulation_logit_score",
+        "score_band_low",
+        "score_band_high",
         "phylogenetic_profile_score",
         "candidate_score",
         "candidate_score_q",
     ],
-    "T3_top30_hcn_candidates": [
+    "T3_top30_cyd_control_candidates": [
         "candidate_id",
         "organism",
         "regulator_class",
         "sensory_domains",
-        "regulation_posterior",
-        "regulation_posterior_hdi_low",
-        "regulation_posterior_hdi_high",
+        "regulation_logit_score",
+        "score_band_low",
+        "score_band_high",
         "phylogenetic_profile_score",
         "candidate_score",
         "candidate_score_q",
@@ -62,7 +62,7 @@ TABLE_SPECS = {
         "tool",
         "analyte_general",
         "decomposable_scoring",
-        "operon_level_posterior",
+        "operon_level_score_band",
         "phylogenetic_profile_cooccurrence",
         "matched_control_enrichment",
         "archetype_clustering",
@@ -109,7 +109,7 @@ def tool_feature_comparison() -> pl.DataFrame:
             "tool": ["EFI-GNT", "RODEO", "antiSMASH", "FlaGs/webFlaGs", "GasRegNet"],
             "analyte_general": [False, False, False, False, True],
             "decomposable_scoring": [False, False, False, False, True],
-            "operon_level_posterior": [False, False, False, False, True],
+            "operon_level_score_band": [False, False, False, False, True],
             "phylogenetic_profile_cooccurrence": [False, False, False, False, True],
             "matched_control_enrichment": [False, False, False, False, True],
             "archetype_clustering": [False, True, True, False, True],
@@ -134,16 +134,16 @@ def write_publication_tables(
         "T1_benchmark_recovery": benchmark_recovery,
         "T2_top30_co_candidates": candidates.filter(pl.col("analyte") == "CO")
         .sort(
-            "regulation_posterior"
-            if "regulation_posterior" in candidates.columns
+            "regulation_logit_score"
+            if "regulation_logit_score" in candidates.columns
             else "candidate_score",
             descending=True,
         )
         .head(30),
-        "T3_top30_hcn_candidates": candidates.filter(pl.col("analyte") == "CN")
+        "T3_top30_cyd_control_candidates": candidates.filter(pl.col("analyte") == "CN")
         .sort(
-            "regulation_posterior"
-            if "regulation_posterior" in candidates.columns
+            "regulation_logit_score"
+            if "regulation_logit_score" in candidates.columns
             else "candidate_score",
             descending=True,
         )

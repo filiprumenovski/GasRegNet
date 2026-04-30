@@ -7,7 +7,12 @@ from typing import Any, cast
 
 import polars as pl
 
-from gasregnet.config import ScoringConfig
+from gasregnet.config import (
+    AnalyteConfig,
+    ScoringConfig,
+    SensoryDomainEntry,
+    SensoryPairedEvidenceRule,
+)
 from gasregnet.schemas import RegulatorCandidatesSchema, validate
 
 DNA_BINDING_PFAMS = {
@@ -41,6 +46,7 @@ CANDIDATE_SCHEMA: dict[str, Any] = {
     "regulator_class": pl.Utf8,
     "dna_binding_domains": pl.List(pl.Utf8),
     "sensory_domains": pl.List(pl.Utf8),
+    "primary_sensory_chemistry": pl.Utf8,
     "pfam_ids": pl.List(pl.Utf8),
     "interpro_ids": pl.List(pl.Utf8),
     "archetype_id": pl.Utf8,
@@ -55,12 +61,39 @@ CANDIDATE_SCHEMA: dict[str, Any] = {
     "structural_plausibility_score": pl.Float64,
     "candidate_score": pl.Float64,
     "candidate_score_q": pl.Float64,
-    "regulation_posterior": pl.Float64,
-    "regulation_posterior_hdi_low": pl.Float64,
-    "regulation_posterior_hdi_high": pl.Float64,
-    "posterior_evidence_model": pl.Utf8,
+    "regulation_logit_score": pl.Float64,
+    "score_band_low": pl.Float64,
+    "score_band_high": pl.Float64,
+    "score_band_model": pl.Utf8,
     "rationale": pl.Utf8,
 }
+CANDIDATE_SCORE_COMPONENTS = {
+    "locus": "locus_score",
+    "regulator_domain": "regulator_domain_score",
+    "sensory_domain": "sensory_domain_score",
+    "proximity": "proximity_score",
+    "archetype_conservation": "archetype_conservation_score",
+    "enrichment": "enrichment_score",
+    "taxonomic_breadth": "taxonomic_breadth_score",
+    "phylogenetic_profile": "phylogenetic_profile_score",
+    "structural_plausibility": "structural_plausibility_score",
+    "operator_motif": "operator_motif_score",
+    "embedding_similarity": "embedding_similarity_score",
+    "foldseek_similarity": "foldseek_similarity_score",
+    "paired_sensor_evidence": "paired_sensor_evidence_score",
+    "conservation_across_taxa": "conservation_across_taxa_score",
+}
+
+
+def expected_chemistry_by_analyte(
+    analytes: list[AnalyteConfig],
+) -> dict[str, set[str]]:
+    """Return expected sensory chemistries keyed by analyte name."""
+
+    return {
+        analyte.analyte: {str(value) for value in analyte.expected_sensory_chemistry}
+        for analyte in analytes
+    }
 
 
 def _position(relative_index: int) -> str:
@@ -124,27 +157,104 @@ def _candidate_enrichment(
     return best_score, best_q
 
 
-def _score_total(row: dict[str, object], scoring: ScoringConfig) -> float:
-    weights = scoring.candidate_score_weights
-    structural_score = row["structural_plausibility_score"]
-    structural_component = (
-        0.0 if structural_score is None else float(cast(float, structural_score))
+def candidate_score_from_components(
+    row: dict[str, object],
+    scoring: ScoringConfig,
+) -> float:
+    """Compute the decomposable candidate score from configured components."""
+
+    total = 0.0
+    for weight_name, weight in scoring.candidate_score_weights.items():
+        component_name = CANDIDATE_SCORE_COMPONENTS.get(weight_name)
+        if component_name is None:
+            if weight == 0.0:
+                continue
+            raise ValueError(f"candidate score weight has no component: {weight_name}")
+        component = row.get(component_name, 0.0)
+        component_value = 0.0 if component is None else float(cast(float, component))
+        total += component_value * float(weight)
+    return total
+
+
+def _regulator_domain_score(row: dict[str, object]) -> float:
+    pfam_ids = {str(pfam_id) for pfam_id in cast(list[Any], row["pfam_ids"])}
+    regulator_class = str(row["regulator_class"])
+    if regulator_class == "none":
+        return 0.0
+    if _dna_binding_domains(sorted(pfam_ids)):
+        return 1.0
+    if regulator_class in {"two_component_rr", "two_component_hk", "sigma54_activator"}:
+        return 0.75
+    return 0.25
+
+
+def _catalog_by_domain(
+    entries: list[SensoryDomainEntry] | None,
+) -> dict[str, SensoryDomainEntry]:
+    if entries is None:
+        return {}
+    return {entry.domain: entry for entry in entries}
+
+
+def _catalog_by_pfam(
+    entries: list[SensoryDomainEntry] | None,
+) -> dict[str, SensoryDomainEntry]:
+    if entries is None:
+        return {}
+    return {entry.pfam_id: entry for entry in entries}
+
+
+def _sensor_chemistries(
+    *,
+    domains: list[str],
+    pfam_ids: set[str],
+    sensory_domain_catalog: list[SensoryDomainEntry] | None,
+    paired_evidence_rules: list[SensoryPairedEvidenceRule] | None,
+) -> list[str]:
+    by_domain = _catalog_by_domain(sensory_domain_catalog)
+    by_pfam = _catalog_by_pfam(sensory_domain_catalog)
+    chemistries: list[str] = []
+    for domain in domains:
+        entry = by_domain.get(domain)
+        if entry is not None and entry.role == "sensor" and entry.chemistry != "none":
+            chemistries.append(entry.chemistry)
+    for pfam_id in pfam_ids:
+        entry = by_pfam.get(pfam_id)
+        if entry is not None and entry.role == "sensor" and entry.chemistry != "none":
+            chemistries.append(entry.chemistry)
+    for rule in paired_evidence_rules or []:
+        if set(rule.if_pfam_all).issubset(pfam_ids) and (
+            not rule.if_co_pfam_any or bool(set(rule.if_co_pfam_any) & pfam_ids)
+        ):
+            chemistries.append(rule.rescore.chemistry)
+    return sorted(set(chemistries))
+
+
+def _sensory_domain_score(
+    *,
+    analyte: str,
+    sensory_domains: list[str],
+    pfam_ids: set[str],
+    sensory_domain_catalog: list[SensoryDomainEntry] | None,
+    paired_evidence_rules: list[SensoryPairedEvidenceRule] | None,
+    expected_chemistry_by_analyte: dict[str, set[str]] | None,
+) -> tuple[float, str]:
+    if sensory_domain_catalog is None or expected_chemistry_by_analyte is None:
+        primary = sensory_domains[0] if sensory_domains else "none"
+        return min(float(len(sensory_domains)), 2.0), primary
+    chemistries = _sensor_chemistries(
+        domains=sensory_domains,
+        pfam_ids=pfam_ids,
+        sensory_domain_catalog=sensory_domain_catalog,
+        paired_evidence_rules=paired_evidence_rules,
     )
-    return (
-        float(cast(float, row["locus_score"])) * weights["locus"]
-        + float(cast(float, row["regulator_domain_score"]))
-        * weights["regulator_domain"]
-        + float(cast(float, row["sensory_domain_score"])) * weights["sensory_domain"]
-        + float(cast(float, row["proximity_score"])) * weights["proximity"]
-        + float(cast(float, row["archetype_conservation_score"]))
-        * weights["archetype_conservation"]
-        + float(cast(float, row["enrichment_score"])) * weights["enrichment"]
-        + float(cast(float, row["taxonomic_breadth_score"]))
-        * weights.get("taxonomic_breadth", 0.0)
-        + float(cast(float, row.get("phylogenetic_profile_score", 0.0)))
-        * weights.get("phylogenetic_profile", 0.0)
-        + structural_component * weights["structural_plausibility"]
-    )
+    if not chemistries:
+        return 0.0, "none"
+    expected = expected_chemistry_by_analyte.get(analyte, set())
+    matches = [chemistry for chemistry in chemistries if chemistry in expected]
+    primary = matches[0] if matches else chemistries[0]
+    score = float(len(matches)) if matches else 0.25
+    return min(score, 2.0), primary
 
 
 def score_candidates(
@@ -152,6 +262,10 @@ def score_candidates(
     genes: pl.DataFrame,
     scoring: ScoringConfig,
     enrichment: pl.DataFrame | None = None,
+    *,
+    sensory_domain_catalog: list[SensoryDomainEntry] | None = None,
+    paired_evidence_rules: list[SensoryPairedEvidenceRule] | None = None,
+    expected_chemistry_by_analyte: dict[str, set[str]] | None = None,
 ) -> pl.DataFrame:
     """Extract and score regulator candidates near scored loci."""
 
@@ -165,6 +279,14 @@ def score_candidates(
         sensory_domains = [
             str(domain) for domain in cast(list[Any], gene["sensory_domains"])
         ]
+        sensory_score, primary_chemistry = _sensory_domain_score(
+            analyte=str(locus["analyte"]),
+            sensory_domains=sensory_domains,
+            pfam_ids=set(pfam_ids),
+            sensory_domain_catalog=sensory_domain_catalog,
+            paired_evidence_rules=paired_evidence_rules,
+            expected_chemistry_by_analyte=expected_chemistry_by_analyte,
+        )
         enrichment_score, q_value = _candidate_enrichment(gene, enrichment_scores)
         row: dict[str, object] = {
             "candidate_id": f"{gene['locus_id']}::{gene['gene_accession']}",
@@ -180,14 +302,15 @@ def score_candidates(
             "regulator_class": gene["regulator_class"],
             "dna_binding_domains": _dna_binding_domains(pfam_ids),
             "sensory_domains": sensory_domains,
+            "primary_sensory_chemistry": primary_chemistry,
             "pfam_ids": pfam_ids,
             "interpro_ids": [
                 str(item) for item in cast(list[Any], gene["interpro_ids"])
             ],
             "archetype_id": None,
             "locus_score": locus["locus_score"],
-            "regulator_domain_score": 1.0,
-            "sensory_domain_score": min(float(len(sensory_domains)), 2.0),
+            "regulator_domain_score": _regulator_domain_score(gene),
+            "sensory_domain_score": sensory_score,
             "proximity_score": _proximity_score(int(gene["relative_index"])),
             "archetype_conservation_score": 0.0,
             "enrichment_score": enrichment_score,
@@ -196,13 +319,13 @@ def score_candidates(
             "structural_plausibility_score": None,
             "candidate_score": 0.0,
             "candidate_score_q": q_value,
-            "regulation_posterior": None,
-            "regulation_posterior_hdi_low": None,
-            "regulation_posterior_hdi_high": None,
-            "posterior_evidence_model": None,
+            "regulation_logit_score": None,
+            "score_band_low": None,
+            "score_band_high": None,
+            "score_band_model": None,
             "rationale": "",
         }
-        row["candidate_score"] = _score_total(row, scoring)
+        row["candidate_score"] = candidate_score_from_components(row, scoring)
         row["rationale"] = (
             f"{row['regulator_class']} regulator {row['position']} of "
             f"{locus['anchor_family']} locus; "

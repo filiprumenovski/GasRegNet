@@ -11,6 +11,7 @@ from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.enrichment import run_enrichment
 from gasregnet.scoring.partition import (
     chemistry_partition_outcome,
+    family_chemistry_table,
     write_partition_outcome,
 )
 
@@ -124,6 +125,11 @@ def test_partition_claim_writes_outcome_json() -> None:
     )
 
     assert out_path.exists()
-    assert outcome["reason"] == "chi-square test on analyte-by-sensory-domain counts"
+    table = family_chemistry_table(candidates)
+    assert table["n_candidates"].sum() == candidates.height
+    assert (
+        outcome["reason"]
+        == "chi-square test on analyte-by-primary-sensory-chemistry counts"
+    )
     assert isinstance(outcome["partition_holds"], bool)
     assert float(cast(float, outcome["p_value"])) >= 0.0

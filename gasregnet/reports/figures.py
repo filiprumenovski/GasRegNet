@@ -76,7 +76,7 @@ def figure_2_locus_landscape(loci: pl.DataFrame, out_dir: Path) -> Path:
             )
         ax.set_ylabel("Locus score")
         ax.set_xlabel("Loci sorted by analyte and score")
-        ax.set_title("CO, NO, HCN, and O2 locus landscape", loc="left")
+        ax.set_title("CO, NO, cyd control, and O2 locus landscape", loc="left")
         return _save(fig, out_dir, "figure_2_locus_landscape")
 
 
@@ -121,17 +121,17 @@ def figure_4_chemistry_partition(enrichment: pl.DataFrame, out_dir: Path) -> Pat
 
 
 def figure_5_candidate_ranking(candidates: pl.DataFrame, out_dir: Path) -> Path:
-    """Render top operon-level regulation posteriors."""
+    """Render top operon-level regulation score bands."""
 
     if candidates.is_empty():
         return _empty_figure(
             out_dir,
             "figure_5_candidate_ranking",
-            "Operon-level posterior",
+            "Operon-level regulation score",
         )
     score_column = (
-        "regulation_posterior"
-        if "regulation_posterior" in candidates.columns
+        "regulation_logit_score"
+        if "regulation_logit_score" in candidates.columns
         else "candidate_score"
     )
     top = candidates.sort(score_column, descending=True).head(30)
@@ -142,11 +142,11 @@ def figure_5_candidate_ranking(candidates: pl.DataFrame, out_dir: Path) -> Path:
             top[score_column].to_list()[::-1],
         )
         ax.set_xlabel(
-            "P(regulation | locus, motif, conservation, structure)"
-            if score_column == "regulation_posterior"
+            "Deterministic regulation logit score"
+            if score_column == "regulation_logit_score"
             else "Candidate score",
         )
-        ax.set_title("Operon-level posterior of regulation", loc="left")
+        ax.set_title("Operon-level regulation score", loc="left")
         return _save(fig, out_dir, "figure_5_candidate_ranking")
 
 

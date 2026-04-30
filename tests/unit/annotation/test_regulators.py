@@ -65,11 +65,12 @@ def test_classify_regulators_marks_non_matches_as_unknown() -> None:
     assert classified["is_regulator_candidate"].item() is False
 
 
-def test_classify_regulators_uses_text_fallback_for_unannotated_refseq_rows() -> None:
+def test_classify_regulators_does_not_promote_text_only_hk_fragments() -> None:
     config = load_config("configs")
     genes = genes_frame().with_columns(
         pl.Series("pfam_ids", [[]], dtype=pl.List(pl.Utf8)),
-        pl.lit("DNA-binding transcriptional repressor YbgA").alias(
+        pl.Series("interpro_ids", [[]], dtype=pl.List(pl.Utf8)),
+        pl.lit("histidine kinase fragment").alias(
             "product_description",
         ),
         pl.lit(False).alias("is_anchor"),
@@ -79,6 +80,6 @@ def test_classify_regulators_uses_text_fallback_for_unannotated_refseq_rows() ->
 
     classified = classify_regulators(genes, config.regulator_families)
 
-    assert classified["functional_class"].item() == "regulator"
-    assert classified["regulator_class"].item() == "one_component"
-    assert classified["is_regulator_candidate"].item() is True
+    assert classified["functional_class"].item() == "unknown"
+    assert classified["regulator_class"].item() == "none"
+    assert classified["is_regulator_candidate"].item() is False

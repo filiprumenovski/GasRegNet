@@ -10,31 +10,40 @@ import polars as pl
 from scipy.stats import chi2_contingency  # type: ignore[import-untyped]
 
 
+def _primary_sensory_chemistry(row: dict[str, object]) -> str:
+    chemistry = row.get("primary_sensory_chemistry")
+    if isinstance(chemistry, str) and chemistry:
+        return chemistry
+    domains = cast(list[Any], row["sensory_domains"])
+    return str(domains[0]) if domains else "none"
+
+
+def _benjamini_hochberg(p_values: list[float]) -> list[float]:
+    if not p_values:
+        return []
+    indexed = sorted(enumerate(p_values), key=lambda item: item[1])
+    adjusted = [1.0] * len(p_values)
+    running = 1.0
+    n = len(p_values)
+    for rank, (index, p_value) in reversed(list(enumerate(indexed, start=1))):
+        running = min(running, p_value * n / rank)
+        adjusted[index] = min(1.0, running)
+    return adjusted
+
+
 def family_chemistry_table(candidates: pl.DataFrame) -> pl.DataFrame:
-    """Count candidate regulator classes by analyte and sensory chemistry."""
+    """Count each candidate once by analyte and primary sensory chemistry."""
 
     rows: list[dict[str, object]] = []
     for row in candidates.iter_rows(named=True):
-        domains = cast(list[Any], row["sensory_domains"])
-        if not domains:
-            rows.append(
-                {
-                    "analyte": row["analyte"],
-                    "regulator_class": row["regulator_class"],
-                    "sensory_domain": "none",
-                    "n_candidates": 1,
-                },
-            )
-            continue
-        for domain in domains:
-            rows.append(
-                {
-                    "analyte": row["analyte"],
-                    "regulator_class": row["regulator_class"],
-                    "sensory_domain": str(domain),
-                    "n_candidates": 1,
-                },
-            )
+        rows.append(
+            {
+                "analyte": row["analyte"],
+                "regulator_class": row["regulator_class"],
+                "sensory_domain": _primary_sensory_chemistry(row),
+                "n_candidates": 1,
+            },
+        )
 
     if not rows:
         return pl.DataFrame(
@@ -86,14 +95,14 @@ def chemistry_partition_outcome(
         matrix.append(row_counts)
 
     chi_square, p_value, _, _ = chi2_contingency(matrix)
-    q_value = float(p_value)
+    q_value = _benjamini_hochberg([float(p_value)])[0]
     return {
         "partition_holds": q_value < alpha,
         "chi_square": float(chi_square),
         "p_value": float(p_value),
         "q_value": q_value,
         "alpha": alpha,
-        "reason": "chi-square test on analyte-by-sensory-domain counts",
+        "reason": "chi-square test on analyte-by-primary-sensory-chemistry counts",
         "analytes": analytes,
         "sensory_domains": domains,
         "table": table.to_dicts(),

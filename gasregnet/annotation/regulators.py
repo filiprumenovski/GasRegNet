@@ -79,6 +79,14 @@ def _classify_regulator_text(product_description: object) -> str:
     return "none"
 
 
+def _has_domain_support(row: dict[str, object]) -> bool:
+    for column in ("pfam_ids", "interpro_ids"):
+        value = row[column]
+        if isinstance(value, list) and value:
+            return True
+    return False
+
+
 def classify_regulators(
     genes: pl.DataFrame,
     regulator_families: list[RegulatorFamilyEntry],
@@ -90,7 +98,7 @@ def classify_regulators(
         updated = dict(row)
         pfam_ids = {str(pfam_id) for pfam_id in row["pfam_ids"]}
         regulator_class = _classify_regulator(pfam_ids, regulator_families)
-        if regulator_class == "none":
+        if regulator_class == "none" and _has_domain_support(row):
             regulator_class = _classify_regulator_text(row["product_description"])
         is_candidate = regulator_class != "none"
         updated["regulator_class"] = regulator_class

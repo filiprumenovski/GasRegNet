@@ -66,6 +66,42 @@ def test_hmmsearch_parses_pyhmmer_hits(
     assert hits["included"].item() is True
 
 
+def test_hmmsearch_streams_sequence_file_to_pyhmmer(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile = tmp_path / "profile.hmm"
+    sequences = tmp_path / "seqs.faa"
+    profile.write_text("HMMER3/f\n", encoding="utf-8")
+    sequences.write_text(">target1\nM\n", encoding="utf-8")
+    streamed_sequences = object()
+    seen_targets: list[object] = []
+
+    monkeypatch.setattr(
+        "gasregnet.search.hmmer.plan7.HMMFile",
+        lambda _: _FakeContext([object()]),
+    )
+    monkeypatch.setattr(
+        "gasregnet.search.hmmer.easel.SequenceFile",
+        lambda *_, **__: _FakeContext(streamed_sequences),
+    )
+
+    def fake_hmmsearch(
+        _queries: object,
+        targets: object,
+        **_kwargs: object,
+    ) -> list[_FakeTopHits]:
+        seen_targets.append(targets)
+        return [_FakeTopHits()]
+
+    monkeypatch.setattr("gasregnet.search.hmmer.hmmer.hmmsearch", fake_hmmsearch)
+
+    hits = hmmsearch(profile, sequences)
+
+    assert hits.height == 1
+    assert seen_targets == [streamed_sequences]
+
+
 def test_hmmsearch_rejects_missing_profile(tmp_path: Path) -> None:
     with pytest.raises(MissingInputError, match="HMM profile"):
         hmmsearch(tmp_path / "missing.hmm", tmp_path / "seqs.faa")

@@ -41,7 +41,6 @@ PAIR_SCHEMA: dict[str, Any] = {
     "pair_score": pl.Float64,
 }
 DNA_BINDING_PFAMS = {
-    "PF00027",
     "PF00126",
     "PF00158",
     "PF00196",
@@ -207,13 +206,9 @@ def build_sensor_regulator_pairs(
         str(row["locus_id"]): str(row["analyte"]) for row in loci.iter_rows(named=True)
     }
     rows: list[dict[str, object]] = []
-    for locus_id in genes["locus_id"].unique().to_list():
-        locus_genes = [
-            row
-            for row in genes.filter(pl.col("locus_id") == locus_id).iter_rows(
-                named=True,
-            )
-        ]
+    for partition in genes.partition_by("locus_id", maintain_order=True):
+        locus_id = str(partition["locus_id"].item(0))
+        locus_genes = list(partition.iter_rows(named=True))
         hks = [
             row
             for row in locus_genes

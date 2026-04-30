@@ -34,6 +34,35 @@ def test_annotate_domains_populates_pfam_and_interpro_lists() -> None:
     assert annotated["interpro_ids"].to_list()[0] == ["IPR000001"]
 
 
+def test_annotate_domains_deduplicates_annotation_lists() -> None:
+    genes = genes_frame().with_columns(
+        pl.lit([]).cast(pl.List(pl.Utf8)).alias("pfam_ids"),
+        pl.lit([]).cast(pl.List(pl.Utf8)).alias("pfam_descriptions"),
+        pl.lit([]).cast(pl.List(pl.Utf8)).alias("interpro_ids"),
+        pl.lit([]).cast(pl.List(pl.Utf8)).alias("interpro_descriptions"),
+    )
+    pfam = pl.DataFrame(
+        {
+            "gene_accession": ["anchor", "anchor", "anchor"],
+            "pfam_id": ["PF02738", "PF02738", "PF03450"],
+            "pfam_description": ["coxL", "coxL", "coxM-like"],
+        },
+    )
+    interpro = pl.DataFrame(
+        {
+            "gene_accession": ["anchor", "anchor"],
+            "interpro_id": ["IPR000001", "IPR000001"],
+            "interpro_description": ["molybdopterin", "molybdopterin"],
+        },
+    )
+
+    annotated = annotate_domains(genes, pfam, interpro)
+
+    assert annotated["pfam_ids"].to_list()[0] == ["PF02738", "PF03450"]
+    assert annotated["pfam_descriptions"].to_list()[0] == ["coxL", "coxM-like"]
+    assert annotated["interpro_ids"].to_list()[0] == ["IPR000001"]
+
+
 def test_annotate_domains_handles_empty_annotation_tables() -> None:
     empty_pfam = pl.DataFrame(
         schema={

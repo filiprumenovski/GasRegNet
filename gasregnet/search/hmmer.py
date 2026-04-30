@@ -30,6 +30,7 @@ def hmmsearch(
     *,
     e_value: float = 1e-5,
     cpus: int = 0,
+    block_residues: int = 100_000,
 ) -> pl.DataFrame:
     """Run pyhmmer hmmsearch and return a hit summary table."""
 
@@ -38,31 +39,43 @@ def hmmsearch(
     if not sequences_faa.exists():
         raise MissingInputError(f"sequence FASTA does not exist: {sequences_faa}")
 
+    rows: list[dict[str, object]] = []
     with plan7.HMMFile(str(profile_hmm)) as hmm_file:
         queries = list(hmm_file)
-    with easel.SequenceFile(str(sequences_faa), digital=True) as sequence_file:
-        sequences = list(sequence_file)
-
-    rows: list[dict[str, object]] = []
-    search_results = hmmer.hmmsearch(
-        queries,
-        cast(Any, sequences),
-        E=e_value,
-        cpus=cpus,
-    )
-    for top_hits in search_results:
-        query_name = _query_name(top_hits)
-        for hit in top_hits:
-            rows.append(
-                {
-                    "query_id": query_name,
-                    "target_id": _decode_name(hit.name),
-                    "evalue": float(hit.evalue),
-                    "score": float(hit.score),
-                    "bias": float(getattr(hit, "bias", 0.0)),
-                    "included": bool(getattr(hit, "included", False)),
-                },
-            )
+        with easel.SequenceFile(str(sequences_faa), digital=True) as sequence_file:
+            targets = cast(Any, sequence_file)
+            if hasattr(targets, "read_block"):
+                blocks: list[Any] | None = None
+            else:
+                blocks = [targets]
+            while True:
+                if blocks is None:
+                    block = targets.read_block(residues=block_residues)
+                    if len(block) == 0:
+                        break
+                elif blocks:
+                    block = blocks.pop(0)
+                else:
+                    break
+                search_results = hmmer.hmmsearch(
+                    queries,
+                    cast(Any, block),
+                    E=e_value,
+                    cpus=cpus,
+                )
+                for top_hits in search_results:
+                    query_name = _query_name(top_hits)
+                    for hit in top_hits:
+                        rows.append(
+                            {
+                                "query_id": query_name,
+                                "target_id": _decode_name(hit.name),
+                                "evalue": float(hit.evalue),
+                                "score": float(hit.score),
+                                "bias": float(getattr(hit, "bias", 0.0)),
+                                "included": bool(getattr(hit, "included", False)),
+                            },
+                        )
 
     return pl.DataFrame(
         rows,

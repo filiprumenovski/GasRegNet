@@ -38,6 +38,16 @@ dev = [
   "hypothesis==6.115.5",
   "pytest-cov==5.0.0"
 ]
+embeddings = [
+  "torch>=2.0",
+  "fair-esm>=2.0"
+]
+bayes = [
+  "pymc>=5.0"
+]
+provenance = [
+  "prov>=2.0"
+]
 
 [project.scripts]
 gasregnet = "gasregnet.cli:app"

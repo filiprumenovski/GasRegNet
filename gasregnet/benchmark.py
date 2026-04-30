@@ -16,7 +16,7 @@ BENCHMARK_RECOVERY_SCHEMA = {
     "hit": pl.Boolean,
     "rank": pl.Int64,
     "candidate_score": pl.Float64,
-    "regulation_posterior": pl.Float64,
+    "regulation_logit_score": pl.Float64,
 }
 BENCHMARK_LIST_COLUMNS = ("expected_sensory_domains", "pmid")
 
@@ -94,8 +94,8 @@ def _candidate_ranks(
     if candidates is None or candidates.is_empty():
         return {}
     sort_column = (
-        "regulation_posterior"
-        if "regulation_posterior" in candidates.columns
+        "regulation_logit_score"
+        if "regulation_logit_score" in candidates.columns
         else "candidate_score"
     )
     ranked = candidates.sort(sort_column, descending=True).with_row_index(
@@ -104,11 +104,11 @@ def _candidate_ranks(
     )
     ranks: dict[str, tuple[int, float, float | None]] = {}
     for row in ranked.iter_rows(named=True):
-        posterior = row.get("regulation_posterior")
+        logit_score = row.get("regulation_logit_score")
         ranks[str(row["gene_accession"])] = (
             int(row["rank"]),
             float(row["candidate_score"]),
-            None if posterior is None else float(posterior),
+            None if logit_score is None else float(logit_score),
         )
     return ranks
 
@@ -158,14 +158,14 @@ def evaluate_benchmark(
         hit = not recovered if is_negative else recovered
         rank: int | None = None
         score: float | None = None
-        posterior: float | None = None
+        logit_score: float | None = None
         protein_name = str(benchmark_row["protein_name"])
         for gene_accession, rank_score in candidate_ranks.items():
-            candidate_rank, candidate_score, candidate_posterior = rank_score
+            candidate_rank, candidate_score, candidate_logit_score = rank_score
             if _contains(gene_accession, protein_name):
                 rank = candidate_rank
                 score = candidate_score
-                posterior = candidate_posterior
+                logit_score = candidate_logit_score
                 break
         rows.append(
             {
@@ -176,7 +176,7 @@ def evaluate_benchmark(
                 "hit": hit,
                 "rank": rank,
                 "candidate_score": score,
-                "regulation_posterior": posterior,
+                "regulation_logit_score": logit_score,
             },
         )
     if not rows:

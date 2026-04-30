@@ -9,6 +9,7 @@ import polars as pl
 from gasregnet.archetypes.cluster import architecture_string
 from gasregnet.config import ScoringConfig
 from gasregnet.schemas import RegulatorCandidatesSchema, validate
+from gasregnet.scoring.candidates import candidate_score_from_components
 
 CANDIDATE_SCHEMA_OVERRIDES: dict[str, Any] = {
     "cluster_id": pl.Int32,
@@ -16,16 +17,17 @@ CANDIDATE_SCHEMA_OVERRIDES: dict[str, Any] = {
     "distance_nt": pl.Int64,
     "dna_binding_domains": pl.List(pl.Utf8),
     "sensory_domains": pl.List(pl.Utf8),
+    "primary_sensory_chemistry": pl.Utf8,
     "pfam_ids": pl.List(pl.Utf8),
     "interpro_ids": pl.List(pl.Utf8),
     "archetype_id": pl.Utf8,
     "phylogenetic_profile_score": pl.Float64,
     "structural_plausibility_score": pl.Float64,
     "candidate_score_q": pl.Float64,
-    "regulation_posterior": pl.Float64,
-    "regulation_posterior_hdi_low": pl.Float64,
-    "regulation_posterior_hdi_high": pl.Float64,
-    "posterior_evidence_model": pl.Utf8,
+    "regulation_logit_score": pl.Float64,
+    "score_band_low": pl.Float64,
+    "score_band_high": pl.Float64,
+    "score_band_model": pl.Utf8,
 }
 
 
@@ -73,29 +75,6 @@ def _archetype_lookup(archetypes: pl.DataFrame) -> dict[tuple[str, str], str]:
         lookup[(str(row["analyte"]), architecture)] = archetype_id
         lookup.setdefault(("", architecture), archetype_id)
     return lookup
-
-
-def _candidate_score(row: dict[str, object], scoring: ScoringConfig) -> float:
-    weights = scoring.candidate_score_weights
-    structural_score = row["structural_plausibility_score"]
-    structural_component = (
-        0.0 if structural_score is None else float(cast(float, structural_score))
-    )
-    return (
-        float(cast(float, row["locus_score"])) * weights["locus"]
-        + float(cast(float, row["regulator_domain_score"]))
-        * weights["regulator_domain"]
-        + float(cast(float, row["sensory_domain_score"])) * weights["sensory_domain"]
-        + float(cast(float, row["proximity_score"])) * weights["proximity"]
-        + float(cast(float, row["archetype_conservation_score"]))
-        * weights["archetype_conservation"]
-        + float(cast(float, row["enrichment_score"])) * weights["enrichment"]
-        + float(cast(float, row["taxonomic_breadth_score"]))
-        * weights.get("taxonomic_breadth", 0.0)
-        + float(cast(float, row.get("phylogenetic_profile_score", 0.0)))
-        * weights.get("phylogenetic_profile", 0.0)
-        + structural_component * weights["structural_plausibility"]
-    )
 
 
 def compute_conservation_scores(
@@ -173,7 +152,10 @@ def compute_conservation_scores(
                 len({_taxonomy(locus, "phylum") for locus in arch_loci}) / 30.0,
             )
         if scoring is not None:
-            updated["candidate_score"] = _candidate_score(updated, scoring)
+            updated["candidate_score"] = candidate_score_from_components(
+                updated,
+                scoring,
+            )
         rows.append(updated)
 
     if not rows:

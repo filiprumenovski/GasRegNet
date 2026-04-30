@@ -15,7 +15,7 @@ def test_tool_feature_comparison_marks_gasregnet_features() -> None:
 
     assert gasregnet["matched_control_enrichment"].item() is True
     assert gasregnet["fdr_controlled_candidates"].item() is True
-    assert gasregnet["operon_level_posterior"].item() is True
+    assert gasregnet["operon_level_score_band"].item() is True
     assert gasregnet["phylogenetic_profile_cooccurrence"].item() is True
 
 
@@ -55,7 +55,7 @@ def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> No
     assert set(outputs) == {
         "T1_benchmark_recovery",
         "T2_top30_co_candidates",
-        "T3_top30_hcn_candidates",
+        "T3_top30_cyd_control_candidates",
         "T4_regulator_family_enrichment",
         "T5_archetype_catalog",
         "T6_tool_feature_comparison",

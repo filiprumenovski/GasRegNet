@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from gasregnet.errors import MissingInputError
+from gasregnet.errors import ExternalToolError, MissingInputError
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
 
 
@@ -46,3 +47,32 @@ def test_run_diamond_rejects_missing_binary(tmp_path: Path, monkeypatch) -> None
 
     with pytest.raises(MissingInputError, match="diamond binary"):
         run_diamond(query, db, tmp_path / "hits.tsv")
+
+
+def test_run_diamond_wraps_subprocess_failure_with_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    query = tmp_path / "query.faa"
+    db = tmp_path / "db.dmnd"
+    query.write_text(">q\nM\n", encoding="utf-8")
+    db.write_text("", encoding="utf-8")
+    monkeypatch.setattr("gasregnet.search.diamond.shutil.which", lambda _: "diamond")
+
+    def fake_run(*_args: object, **_kwargs: object) -> None:
+        raise subprocess.CalledProcessError(
+            2,
+            ["diamond", "blastp"],
+            output="partial output",
+            stderr="database is corrupt",
+        )
+
+    monkeypatch.setattr("gasregnet.search.diamond.subprocess.run", fake_run)
+
+    with pytest.raises(ExternalToolError) as error:
+        run_diamond(query, db, tmp_path / "hits.tsv")
+
+    message = str(error.value)
+    assert "exit code 2" in message
+    assert "stderr: database is corrupt" in message
+    assert "stdout: partial output" in message

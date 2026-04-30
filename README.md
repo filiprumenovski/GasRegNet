@@ -1,11 +1,13 @@
 # GasRegNet
 
 GasRegNet is a comparative genomics package for discovering candidate bacterial
-gas-sensing transcriptional regulators across CO, NO, HCN, and O2. It implements the project contracts in
+gas-sensing transcriptional regulators across CO, NO, and O2, with cyd loci
+kept as a cyanide-resistant respiration control rather than a cyanide-sensing
+headline. It implements the project contracts in
 `ARCHITECTURE.md`, `PREPRINT_PLAN.md`, and `ENGINEERING_PROMPT.md`: validated
 configuration, EFI-GNT SQLite ingestion, DuckDB RefSeq catalogs, corpus anchor
-detection, RefSeq neighborhood extraction, annotation, scoring, operon-level
-posterior probabilities of regulation with 94% HDIs, phylogenetic profile
+detection, RefSeq neighborhood extraction, annotation, scoring, deterministic
+operon-level regulation score bands, phylogenetic profile
 co-occurrence evidence, synthetic-truth calibration fixtures, enrichment,
 archetype clustering, report tables, figures, captions, manifests, and local
 Snakemake reproducibility paths.
@@ -62,7 +64,7 @@ under ignored `databases/`.
 writes `results/refseq_anchor_scan.csv`.
 `make corpus-repro` runs the small RefSeq corpus workflow end to end and writes
 `anchor_hits.parquet`, canonical `loci.parquet` and `genes.parquet`, scored
-tables, posterior candidate probabilities, figures, captions, and a run
+tables, candidate score bands, figures, captions, and a run
 manifest under `results/corpus/`.
 
 ## CLI

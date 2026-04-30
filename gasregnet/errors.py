@@ -19,6 +19,10 @@ class MissingInputError(GasRegNetError):
     """Raised when a required input file or binary is missing."""
 
 
+class ExternalToolError(GasRegNetError):
+    """Raised when an external command-line tool fails."""
+
+
 class BenchmarkMissError(GasRegNetError):
     """Raised when a benchmark protein is absent from a corpus."""
 

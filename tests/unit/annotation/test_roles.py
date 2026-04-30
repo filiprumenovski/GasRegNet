@@ -5,6 +5,7 @@ from datetime import datetime
 import polars as pl
 
 from gasregnet.annotation.roles import (
+    DNA_BINDING_PFAMS,
     assign_sensor_roles,
     build_sensor_regulator_pairs,
 )
@@ -110,6 +111,29 @@ def test_build_sensor_regulator_pairs_links_fixl_fixj() -> None:
     assert pairs["hk_gene_accession"].item() == "gene0"
     assert pairs["rr_gene_accession"].item() == "gene1"
     assert pairs["hk_sensor_domains"].to_list()[0] == ["PAS_generic"]
+
+
+def test_build_sensor_regulator_pairs_does_not_report_pf00027_as_dna_binding() -> None:
+    config = load_config("configs")
+    assigned = _genes([["PF00512", "PF00989"], ["PF00027"]]).with_columns(
+        pl.Series(
+            "regulator_class",
+            ["two_component_hk", "two_component_rr"],
+            dtype=pl.Utf8,
+        ),
+        pl.Series("sensor_role", ["sensor", "regulator"], dtype=pl.Utf8),
+        pl.Series("is_regulator_candidate", [False, True], dtype=pl.Boolean),
+    )
+
+    pairs = build_sensor_regulator_pairs(
+        assigned,
+        _loci(),
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
+
+    assert "PF00027" not in DNA_BINDING_PFAMS
+    assert pairs["rr_dna_binding_domains"].to_list()[0] == []
 
 
 def test_assign_sensor_roles_classifies_rcom_and_arsr_as_both() -> None:

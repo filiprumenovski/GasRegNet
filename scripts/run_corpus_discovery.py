@@ -45,7 +45,7 @@ from gasregnet.schemas import (
     RegulatorCandidatesSchema,
     SensorRegulatorPairsSchema,
 )
-from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.candidates import expected_chemistry_by_analyte, score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
 from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
@@ -54,7 +54,7 @@ from gasregnet.scoring.enrichment import (
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
-from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
+from gasregnet.scoring.posterior import assign_operon_regulation_score_bands
 
 
 def _read_corpus_config(path: Path) -> dict[str, Any]:
@@ -124,7 +124,7 @@ def _enrichment(
             control_genes,
             analyte="CO",
             case_definition="RefSeq corpus CO anchor neighborhoods",
-            control_definition="RefSeq corpus CN anchor neighborhoods",
+            control_definition="RefSeq corpus cyd-control neighborhoods",
             stratum_column=stratum_column,
             alpha=alpha,
             deduplication_policy=strict_policy,
@@ -134,7 +134,7 @@ def _enrichment(
         control_genes,
         analyte="CO",
         case_definition="RefSeq corpus CO anchor neighborhoods",
-        control_definition="RefSeq corpus CN anchor neighborhoods",
+        control_definition="RefSeq corpus cyd-control neighborhoods",
         alpha=alpha,
     )
 
@@ -154,7 +154,7 @@ def _enrichment_robustness(
         genes.filter(pl.col("locus_id").is_in(control_loci)),
         analyte="CO",
         case_definition="RefSeq corpus CO anchor neighborhoods",
-        control_definition="RefSeq corpus CN anchor neighborhoods",
+        control_definition="RefSeq corpus cyd-control neighborhoods",
         stratum_column=stratum_column,
         alpha=alpha,
     )
@@ -245,7 +245,15 @@ def run_corpus_discovery(
         alpha=config.scoring.enrichment.alpha,
         stratum_column=config.scoring.enrichment.stratum_column,
     )
-    candidates = score_candidates(scored_loci, genes, config.scoring, enrichment)
+    candidates = score_candidates(
+        scored_loci,
+        genes,
+        config.scoring,
+        enrichment,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+        expected_chemistry_by_analyte=expected_chemistry_by_analyte(config.analytes),
+    )
     archetypes = cluster_archetypes(scored_loci, candidates)
     candidates = compute_conservation_scores(
         candidates,
@@ -259,7 +267,7 @@ def run_corpus_discovery(
         scored_loci,
         scoring=config.scoring,
     )
-    candidates = assign_operon_regulation_posteriors(candidates)
+    candidates = assign_operon_regulation_score_bands(candidates)
     archetypes = cluster_archetypes(scored_loci, candidates)
     benchmark = evaluate_benchmark(benchmark_csv, anchor_hits, candidates)
 

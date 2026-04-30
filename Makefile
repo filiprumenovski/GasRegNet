@@ -1,4 +1,4 @@
-.PHONY: sync lint test assets profiles datasets index-datasets summarize-datasets scan-datasets repro repro-real corpus-repro clean
+.PHONY: sync lint test assets profiles datasets index-datasets summarize-datasets scan-datasets discover-motifs embed-proteins foldseek-search fit-bayesian build-views emit-provenance check-tools repro repro-real corpus-repro clean
 
 sync:
 	uv sync --extra dev
@@ -30,6 +30,9 @@ scan-datasets:
 		--manifest configs/refseq_catalogs.yaml \
 		--scan-config configs/refseq_scan.yaml \
 		--out results/refseq_anchor_scan.csv
+
+discover-motifs embed-proteins foldseek-search fit-bayesian build-views emit-provenance check-tools:
+	@echo "$@ is a placeholder target"
 
 repro:
 	uv run snakemake -s workflows/sqlite_mode.smk --cores 1

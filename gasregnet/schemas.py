@@ -18,6 +18,7 @@ REGULATOR_CLASSES = [
     "one_component",
     "two_component_rr",
     "two_component_hk",
+    "sigma54_activator",
     "sigma",
     "anti_sigma",
     "antiterminator",
@@ -163,6 +164,7 @@ RegulatorCandidatesSchema = _schema(
         ),
         "dna_binding_domains": _column(pl.List(pl.Utf8)),
         "sensory_domains": _column(pl.List(pl.Utf8)),
+        "primary_sensory_chemistry": _column(pl.Utf8, required=False),
         "pfam_ids": _column(pl.List(pl.Utf8)),
         "interpro_ids": _column(pl.List(pl.Utf8)),
         "archetype_id": _column(pl.Utf8, nullable=True),
@@ -181,25 +183,25 @@ RegulatorCandidatesSchema = _schema(
             checks=pa.Check.in_range(0.0, 1.0),
             nullable=True,
         ),
-        "regulation_posterior": _column(
+        "regulation_logit_score": _column(
             pl.Float64,
             checks=pa.Check.in_range(0.0, 1.0),
             required=False,
             nullable=True,
         ),
-        "regulation_posterior_hdi_low": _column(
+        "score_band_low": _column(
             pl.Float64,
             checks=pa.Check.in_range(0.0, 1.0),
             required=False,
             nullable=True,
         ),
-        "regulation_posterior_hdi_high": _column(
+        "score_band_high": _column(
             pl.Float64,
             checks=pa.Check.in_range(0.0, 1.0),
             required=False,
             nullable=True,
         ),
-        "posterior_evidence_model": _column(pl.Utf8, required=False, nullable=True),
+        "score_band_model": _column(pl.Utf8, required=False, nullable=True),
         "rationale": _column(pl.Utf8),
     },
 )

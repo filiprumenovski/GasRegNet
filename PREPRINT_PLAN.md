@@ -20,7 +20,8 @@ in a biological sentence rather than a capability statement.
 
 ## 2. The thesis you should commit to
 
-> Bacterial sensors of CO and HCN partition into chemically stratified
+> Bacterial sensors of CO, NO, and O2, benchmarked against a cyd
+> cyanide-resistant respiration control, partition into chemically stratified
 > regulatory architectures. Systematic genome-neighborhood mining recovers
 > known sensors, expands each family by N-fold, and nominates a structurally
 > tractable shortlist of previously uncharacterized candidates.
@@ -48,13 +49,13 @@ Without leg 3, the paper is a tool report and will be cited as such. With leg
 
 ## 3. Title and abstract
 
-Title: **Genome-neighborhood mining partitions bacterial CO and HCN sensors by
+Title: **Genome-neighborhood mining partitions bacterial gas-sensing regulators by
 coordination chemistry.**
 
 Abstract, target ~225 words:
 
-> Bacteria sense small toxic gases including carbon monoxide and hydrogen
-> cyanide using transcriptional regulators that have been characterized one
+> Bacteria sense small toxic gases including carbon monoxide, nitric oxide, and
+> oxygen using transcriptional regulators that have been characterized one
 > family at a time. The full landscape of gas-responsive regulators across
 > bacterial diversity is unknown, and there is no systematic resource that
 > ranks plausible sensor candidates with calibrated confidence. We developed
@@ -62,15 +63,15 @@ Abstract, target ~225 words:
 > genome-neighborhood encoding, sensory-domain priors, operon archetype
 > clustering, and matched-control enrichment to nominate bacterial gas-sensing
 > regulators. Applied to N anchor families spanning CO oxidation and
-> cyanide-tolerant respiration across M sequenced bacterial genomes from GTDB
+> cyanide-resistant respiration controls across M sequenced bacterial genomes from GTDB
 > rs220, GasRegNet recovers all canonical CO sensors at recall X and identifies
 > P high-confidence regulator candidates passing matched-control enrichment at
-> q < 0.05. CO-anchored and cyanide-anchored loci partition into chemically
+> q < 0.05. CO, NO, and O2 anchor loci partition into chemically
 > distinct regulatory architectures. CO loci concentrate heme and iron-sulfur
-> sensory chemistry within FNR/CRP and CooA-like clades, while cyanide-anchored
-> loci enrich for cysteine-rich MerR/ArsR families and two-component systems
-> flanking cytochrome bd. AlphaFold-guided structural prioritization nominates
-> one CO and one cyanide candidate with conserved metal-coordinating residues
+> sensory chemistry within FNR/CRP and CooA-like clades, while cyd control
+> loci are reported separately as cyanide-resistant respiration context rather
+> than cyanide sensors. AlphaFold-guided structural prioritization nominates
+> gas-response candidates with conserved metal-coordinating residues
 > lining a closed pocket positioned to bind a diatomic ligand. We release
 > ranked candidate tables, archetype catalogs, structural models, and a
 > reproducible Snakemake pipeline as a community resource.
@@ -137,20 +138,20 @@ ARCHITECTURE.md lists six figures, all of which describe what the pipeline
 shows rather than what was discovered. Reframe each caption to lead with a
 result sentence:
 
-- **Figure 1.** *GasRegNet recovers known bacterial CO and HCN sensors across
+- **Figure 1.** *GasRegNet recovers known bacterial gas-response sensors across
   N organisms with recall X.* Workflow schematic in panel A, ROC and PR
   curves on the benchmark in panels B and C, score-component contribution
   bars in panel D.
 
-- **Figure 2.** *CO and HCN anchor loci occupy distinct taxonomic territory
+- **Figure 2.** *CO, NO, O2, and cyd-control anchor loci occupy distinct taxonomic territory
   and cluster into separable architectures.* Locus landscape colored by
   analyte and confidence class with the query cluster marked.
 
 - **Figure 3.** *Six recurrent archetypes account for Y% of high-confidence
-  CO loci and six for Z% of HCN loci.* Gene-arrow atlas with frequencies
+  CO loci and the dominant cyd-control loci.* Gene-arrow atlas with frequencies
   and taxonomic breadth.
 
-- **Figure 4.** *Sensory chemistry partitions CO and HCN regulator families.*
+- **Figure 4.** *Sensory chemistry partitions gas-response regulator families.*
   Regulator family by sensory domain heatmap, faceted by analyte, with
   enrichment q values overlaid. This is the headline figure.
 
@@ -158,8 +159,8 @@ result sentence:
   decomposable scores.* Top-30 ranking with stacked-bar score decomposition.
 
 - **Figure 6.** *Structural prioritization identifies a closed metal-coordinated
-  pocket in the top CO candidate and a cysteine-lined pocket in the top HCN
-  candidate.* AlphaFold model, PDB superposition, conserved-residue map,
+  pocket in the top CO candidate and related gas-response candidates.*
+  AlphaFold model, PDB superposition, conserved-residue map,
   proposed binding pocket.
 
 If a caption only describes the visualization, the figure has not earned its
@@ -184,9 +185,9 @@ Pre-empt the four standard objections in a half-page Limitations subsection:
    industrially relevant taxa. Report phylum-level coverage. Discuss what
    may be missing from undersampled phyla.
 
-4. **CO and HCN are not the same biology.** Lumping them as "small gas
-   molecules" risks obscuring real differences. Lead with the partition,
-   not the unification.
+4. **Cyd loci are not cyanide sensors.** Treat cytochrome bd neighborhoods as
+   cyanide-resistant respiration controls unless and until a genuine cyanide
+   sensing benchmark is curated.
 
 A clean Limitations section before Discussion materially improves review
 outcomes.
@@ -197,7 +198,7 @@ outcomes.
 |-------|---------|
 | T1 | Benchmark recovery: known-sensor list, hit/miss, rank, score decomposition |
 | T2 | Top 30 CO candidates with anchor, organism, regulator class, sensory domain, score components, q value, structural-pocket flag |
-| T3 | Top 30 HCN candidates, same schema |
+| T3 | Top 30 cyd-control candidates, same schema |
 | T4 | Regulator-family enrichment by analyte with FDR |
 | T5 | Archetype catalog: frequency, taxonomic breadth, dominant regulator class |
 | T6 | Tool feature-comparison matrix |

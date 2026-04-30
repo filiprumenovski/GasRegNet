@@ -138,7 +138,7 @@ def simulate_synthetic_truth_corpus(
                     "product_description": (
                         "synthetic carbon monoxide dehydrogenase"
                         if has_truth
-                        else "synthetic cyanide oxidase"
+                        else "synthetic cyd respiration control oxidase"
                     ),
                     "pfam_ids": ["PF02738"] if has_truth else ["PF01654"],
                     "pfam_descriptions": ["coxL"] if has_truth else ["cydA"],

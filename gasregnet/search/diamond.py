@@ -8,7 +8,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gasregnet.errors import MissingInputError
+from gasregnet.errors import ExternalToolError, MissingInputError
 
 DIAMOND_COLUMNS = [
     "query_id",
@@ -93,7 +93,20 @@ def run_diamond(
         str(threads),
         f"--{sensitivity}",
     ]
-    subprocess.run(command, check=True, capture_output=True, text=True)
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as error:
+        stdout = (error.stdout or "").strip()
+        stderr = (error.stderr or "").strip()
+        context = [
+            f"DIAMOND failed with exit code {error.returncode}",
+            f"command: {' '.join(command)}",
+        ]
+        if stderr:
+            context.append(f"stderr: {stderr}")
+        if stdout:
+            context.append(f"stdout: {stdout}")
+        raise ExternalToolError("\n".join(context)) from error
     return out_tsv
 
 

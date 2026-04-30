@@ -16,5 +16,5 @@ window_genes: 10
 known_organisms_table: data/references/known_co_organisms.csv
 expected_sensory_chemistry:
   - heme
-  - iron_sulfur
+  - iron_sulfur_4Fe4S
 seed: 20260429

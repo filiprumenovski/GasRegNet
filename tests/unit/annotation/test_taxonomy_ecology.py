@@ -63,6 +63,42 @@ def test_score_taxonomic_context_scores_unknown_as_zero() -> None:
     assert scored["taxonomic_context_score"].item() == 0.0
 
 
+def test_score_taxonomic_context_matches_mixed_organism_and_taxon_rows() -> None:
+    loci = pl.concat(
+        [
+            loci_frame().with_columns(
+                pl.lit("known-by-organism").alias("locus_id"),
+                pl.lit("Matched organism").alias("organism"),
+                pl.lit(111).cast(pl.Int64).alias("taxon_id"),
+            ),
+            loci_frame().with_columns(
+                pl.lit("known-by-taxon").alias("locus_id"),
+                pl.lit("Different organism").alias("organism"),
+                pl.lit(222).cast(pl.Int64).alias("taxon_id"),
+            ),
+            loci_frame().with_columns(
+                pl.lit("unknown").alias("locus_id"),
+                pl.lit("Unknown organism").alias("organism"),
+                pl.lit(333).cast(pl.Int64).alias("taxon_id"),
+            ),
+        ],
+        how="vertical",
+    )
+    known = pl.DataFrame(
+        {
+            "organism": ["Matched organism", "Other organism"],
+            "taxon_id": [999, 222],
+            "evidence": ["literature", "literature"],
+            "pmid": ["00000000", "00000000"],
+            "notes": ["", ""],
+        },
+    )
+
+    scored = score_taxonomic_context(loci, known, matched_score=0.5).sort("locus_id")
+
+    assert scored["taxonomic_context_score"].to_list() == [0.5, 0.5, 0.0]
+
+
 def test_score_taxonomic_context_by_analyte_uses_configured_tables(
     tmp_path: Path,
 ) -> None:

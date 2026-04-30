@@ -56,7 +56,8 @@ from gasregnet.schemas import (
     RegulatorCandidatesSchema,
     SensorRegulatorPairsSchema,
 )
-from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.candidates import expected_chemistry_by_analyte, score_candidates
+from gasregnet.scoring.conservation import compute_conservation_scores
 from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
     run_enrichment,
@@ -64,7 +65,7 @@ from gasregnet.scoring.enrichment import (
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
-from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
+from gasregnet.scoring.posterior import assign_operon_regulation_score_bands
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
 from gasregnet.simulation.synthetic_truth import simulate_synthetic_truth_corpus
 
@@ -120,21 +121,21 @@ def _fallback_benchmark(candidates_path: Path) -> Path:
     output = candidates_path.parent / "benchmark_recovery.csv"
     header = (
         "benchmark_id,analyte,protein_name,organism,hit,rank,"
-        "regulation_posterior,candidate_score\n"
+        "regulation_logit_score,candidate_score\n"
     )
     if candidates.is_empty():
         output.write_text(header, encoding="utf-8")
         return output
     sort_column = (
-        "regulation_posterior"
-        if "regulation_posterior" in candidates.columns
+        "regulation_logit_score"
+        if "regulation_logit_score" in candidates.columns
         else "candidate_score"
     )
     top = candidates.sort(sort_column, descending=True).row(0, named=True)
-    posterior = top.get("regulation_posterior")
+    logit_score = top.get("regulation_logit_score")
     output.write_text(
         header + f"derived_top_candidate,{top['analyte']},{top['gene_accession']},"
-        f"{top['organism']},true,1,{'' if posterior is None else posterior},"
+        f"{top['organism']},true,1,{'' if logit_score is None else logit_score},"
         f"{top['candidate_score']}\n",
         encoding="utf-8",
     )
@@ -1093,13 +1094,28 @@ def score_command(
     genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
     loci = score_taxonomic_context_by_analyte(loci, cfg.analytes, root=Path("."))
     scored_loci = score_loci(loci, cfg.scoring)
-    candidates = score_candidates(scored_loci, genes, cfg.scoring)
+    candidates = score_candidates(
+        scored_loci,
+        genes,
+        cfg.scoring,
+        sensory_domain_catalog=cfg.sensory_domains,
+        paired_evidence_rules=cfg.paired_evidence,
+        expected_chemistry_by_analyte=expected_chemistry_by_analyte(cfg.analytes),
+    )
+    archetypes = cluster_archetypes(scored_loci, candidates)
+    candidates = compute_conservation_scores(
+        candidates,
+        archetypes,
+        scored_loci,
+        min_loci_per_archetype=1,
+        scoring=cfg.scoring,
+    )
     candidates = assign_phylogenetic_profile_scores(
         candidates,
         scored_loci,
         scoring=cfg.scoring,
     )
-    candidates = assign_operon_regulation_posteriors(candidates)
+    candidates = assign_operon_regulation_score_bands(candidates)
     locus_columns = [
         column for column in LociSchema.columns if column in scored_loci.columns
     ]

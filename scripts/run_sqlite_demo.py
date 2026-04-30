@@ -37,7 +37,7 @@ from gasregnet.schemas import (
     RegulatorCandidatesSchema,
     SensorRegulatorPairsSchema,
 )
-from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.candidates import expected_chemistry_by_analyte, score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
 from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
@@ -46,7 +46,7 @@ from gasregnet.scoring.enrichment import (
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
-from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
+from gasregnet.scoring.posterior import assign_operon_regulation_score_bands
 from scripts.build_test_fixtures import build_mini_efi
 
 
@@ -100,12 +100,12 @@ def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
                 "hit": [False],
                 "rank": [None],
                 "candidate_score": [None],
-                "regulation_posterior": [None],
+                "regulation_logit_score": [None],
             },
             schema_overrides={
                 "rank": pl.Int64,
                 "candidate_score": pl.Float64,
-                "regulation_posterior": pl.Float64,
+                "regulation_logit_score": pl.Float64,
             },
         )
     row = top.row(0, named=True)
@@ -118,12 +118,12 @@ def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
             "hit": [True],
             "rank": [1],
             "candidate_score": [row["candidate_score"]],
-            "regulation_posterior": [row.get("regulation_posterior")],
+            "regulation_logit_score": [row.get("regulation_logit_score")],
         },
         schema_overrides={
             "rank": pl.Int64,
             "candidate_score": pl.Float64,
-            "regulation_posterior": pl.Float64,
+            "regulation_logit_score": pl.Float64,
         },
     )
 
@@ -189,7 +189,7 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
             control_enrichment_genes,
             analyte="CO",
             case_definition="mini CO fixture loci",
-            control_definition="mini CN relabeled fixture loci",
+            control_definition="mini cyd-control fixture loci",
             stratum_column=config.scoring.enrichment.stratum_column,
             alpha=config.scoring.enrichment.alpha,
             deduplication_policy=config.scoring.enrichment.strict_policy,
@@ -200,7 +200,7 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
             control_enrichment_genes,
             analyte="CO",
             case_definition="mini CO fixture loci",
-            control_definition="mini CN relabeled fixture loci",
+            control_definition="mini cyd-control fixture loci",
             alpha=config.scoring.enrichment.alpha,
         )
     enrichment_robustness = run_enrichment_robustness(
@@ -208,11 +208,19 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         control_enrichment_genes,
         analyte="CO",
         case_definition="mini CO fixture loci",
-        control_definition="mini CN relabeled fixture loci",
+        control_definition="mini cyd-control fixture loci",
         stratum_column=config.scoring.enrichment.stratum_column,
         alpha=config.scoring.enrichment.alpha,
     )
-    candidates = score_candidates(scored_loci, genes, config.scoring, enrichment)
+    candidates = score_candidates(
+        scored_loci,
+        genes,
+        config.scoring,
+        enrichment,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+        expected_chemistry_by_analyte=expected_chemistry_by_analyte(config.analytes),
+    )
     archetypes = cluster_archetypes(scored_loci, candidates)
     candidates = compute_conservation_scores(
         candidates,
@@ -226,7 +234,7 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         scored_loci,
         scoring=config.scoring,
     )
-    candidates = assign_operon_regulation_posteriors(candidates)
+    candidates = assign_operon_regulation_score_bands(candidates)
     archetypes = cluster_archetypes(scored_loci, candidates)
     benchmark = _benchmark_recovery(candidates)
 

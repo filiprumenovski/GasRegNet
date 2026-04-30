@@ -266,3 +266,16 @@ def test_genes_schema_enforces_anchor_cross_field_rule() -> None:
 
     with pytest.raises(SchemaError, match="relative_index == 0"):
         schemas.validate(frame, schemas.GenesSchema)
+
+
+def test_regulator_schemas_accept_sigma54_activator_class() -> None:
+    genes = genes_frame().with_columns(
+        pl.lit("regulator").alias("functional_class"),
+        pl.lit("sigma54_activator").alias("regulator_class"),
+    )
+    candidates = candidates_frame().with_columns(
+        pl.lit("sigma54_activator").alias("regulator_class"),
+    )
+
+    assert schemas.validate(genes, schemas.GenesSchema).height == 1
+    assert schemas.validate(candidates, schemas.RegulatorCandidatesSchema).height == 1
