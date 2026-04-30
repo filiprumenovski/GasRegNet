@@ -30,6 +30,7 @@ from gasregnet.reports.tables import write_publication_tables
 from gasregnet.schemas import (
     ArchetypesSchema,
     EnrichmentResultsSchema,
+    EnrichmentRobustnessSchema,
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
@@ -37,7 +38,11 @@ from gasregnet.schemas import (
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
-from gasregnet.scoring.enrichment import run_enrichment
+from gasregnet.scoring.enrichment import (
+    run_enrichment,
+    run_enrichment_robustness,
+    run_stratified_enrichment,
+)
 from gasregnet.scoring.loci import score_loci
 from scripts.build_test_fixtures import build_mini_efi
 
@@ -49,6 +54,7 @@ def _write_frame_set(
     genes: pl.DataFrame,
     candidates: pl.DataFrame,
     enrichment: pl.DataFrame,
+    enrichment_robustness: pl.DataFrame,
     archetypes: pl.DataFrame,
     sensor_regulator_pairs: pl.DataFrame,
 ) -> None:
@@ -65,6 +71,11 @@ def _write_frame_set(
         enrichment,
         intermediate / "enrichment.parquet",
         EnrichmentResultsSchema,
+    )
+    write_parquet(
+        enrichment_robustness,
+        intermediate / "enrichment_robustness.parquet",
+        EnrichmentRobustnessSchema,
     )
     write_parquet(archetypes, intermediate / "archetypes.parquet", ArchetypesSchema)
     write_parquet(
@@ -104,6 +115,21 @@ def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def _genes_with_locus_taxonomy(loci: pl.DataFrame, genes: pl.DataFrame) -> pl.DataFrame:
+    taxonomy_columns = ["locus_id"] + [
+        column
+        for column in ("organism", "taxon_id", "genus", "family")
+        if column in loci.columns and column not in genes.columns
+    ]
+    if len(taxonomy_columns) == 1:
+        return genes
+    return genes.join(
+        loci.select(taxonomy_columns).unique("locus_id"),
+        on="locus_id",
+        how="left",
+    )
+
+
 def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> Path:
     """Run the deterministic SQLite fixture through the implemented pipeline."""
 
@@ -132,14 +158,40 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
     cn_locus_ids = (
         scored_loci.filter(pl.col("analyte") == "CN")["locus_id"].unique().to_list()
     )
-    case_genes = genes.filter(pl.col("locus_id").is_in(co_locus_ids))
-    control_genes = genes.filter(pl.col("locus_id").is_in(cn_locus_ids))
-    enrichment = run_enrichment(
-        case_genes,
-        control_genes,
+    enrichment_genes = _genes_with_locus_taxonomy(scored_loci, genes)
+    case_enrichment_genes = enrichment_genes.filter(
+        pl.col("locus_id").is_in(co_locus_ids),
+    )
+    control_enrichment_genes = enrichment_genes.filter(
+        pl.col("locus_id").is_in(cn_locus_ids),
+    )
+    if config.scoring.enrichment.test == "cmh":
+        enrichment = run_stratified_enrichment(
+            case_enrichment_genes,
+            control_enrichment_genes,
+            analyte="CO",
+            case_definition="mini CO fixture loci",
+            control_definition="mini CN relabeled fixture loci",
+            stratum_column=config.scoring.enrichment.stratum_column,
+            alpha=config.scoring.enrichment.alpha,
+            deduplication_policy=config.scoring.enrichment.strict_policy,
+        )
+    else:
+        enrichment = run_enrichment(
+            case_enrichment_genes,
+            control_enrichment_genes,
+            analyte="CO",
+            case_definition="mini CO fixture loci",
+            control_definition="mini CN relabeled fixture loci",
+            alpha=config.scoring.enrichment.alpha,
+        )
+    enrichment_robustness = run_enrichment_robustness(
+        case_enrichment_genes,
+        control_enrichment_genes,
         analyte="CO",
         case_definition="mini CO fixture loci",
         control_definition="mini CN relabeled fixture loci",
+        stratum_column=config.scoring.enrichment.stratum_column,
         alpha=config.scoring.enrichment.alpha,
     )
     candidates = score_candidates(scored_loci, genes, config.scoring, enrichment)
@@ -160,6 +212,7 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         genes=genes,
         candidates=candidates,
         enrichment=enrichment,
+        enrichment_robustness=enrichment_robustness,
         archetypes=archetypes,
         sensor_regulator_pairs=sensor_regulator_pairs,
     )

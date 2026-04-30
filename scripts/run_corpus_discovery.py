@@ -37,6 +37,7 @@ from gasregnet.schemas import (
     AnchorHitsSchema,
     ArchetypesSchema,
     EnrichmentResultsSchema,
+    EnrichmentRobustnessSchema,
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
@@ -44,7 +45,11 @@ from gasregnet.schemas import (
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
-from gasregnet.scoring.enrichment import run_enrichment
+from gasregnet.scoring.enrichment import (
+    run_enrichment,
+    run_enrichment_robustness,
+    run_stratified_enrichment,
+)
 from gasregnet.scoring.loci import score_loci
 
 
@@ -63,6 +68,7 @@ def _write_frame_set(
     genes: pl.DataFrame,
     candidates: pl.DataFrame,
     enrichment: pl.DataFrame,
+    enrichment_robustness: pl.DataFrame,
     archetypes: pl.DataFrame,
     sensor_regulator_pairs: pl.DataFrame,
 ) -> None:
@@ -81,6 +87,11 @@ def _write_frame_set(
         intermediate / "enrichment.parquet",
         EnrichmentResultsSchema,
     )
+    write_parquet(
+        enrichment_robustness,
+        intermediate / "enrichment_robustness.parquet",
+        EnrichmentRobustnessSchema,
+    )
     write_parquet(archetypes, intermediate / "archetypes.parquet", ArchetypesSchema)
     write_parquet(
         sensor_regulator_pairs,
@@ -93,17 +104,70 @@ def _enrichment(
     loci: pl.DataFrame,
     genes: pl.DataFrame,
     *,
+    test: str,
     alpha: float,
+    stratum_column: str,
+    strict_policy: str,
 ) -> pl.DataFrame:
+    genes = _genes_with_locus_taxonomy(loci, genes)
     case_loci = loci.filter(pl.col("analyte") == "CO")["locus_id"].to_list()
     control_loci = loci.filter(pl.col("analyte") == "CN")["locus_id"].to_list()
+    case_genes = genes.filter(pl.col("locus_id").is_in(case_loci))
+    control_genes = genes.filter(pl.col("locus_id").is_in(control_loci))
+    if test == "cmh":
+        return run_stratified_enrichment(
+            case_genes,
+            control_genes,
+            analyte="CO",
+            case_definition="RefSeq corpus CO anchor neighborhoods",
+            control_definition="RefSeq corpus CN anchor neighborhoods",
+            stratum_column=stratum_column,
+            alpha=alpha,
+            deduplication_policy=strict_policy,
+        )
     return run_enrichment(
+        case_genes,
+        control_genes,
+        analyte="CO",
+        case_definition="RefSeq corpus CO anchor neighborhoods",
+        control_definition="RefSeq corpus CN anchor neighborhoods",
+        alpha=alpha,
+    )
+
+
+def _enrichment_robustness(
+    loci: pl.DataFrame,
+    genes: pl.DataFrame,
+    *,
+    alpha: float,
+    stratum_column: str,
+) -> pl.DataFrame:
+    genes = _genes_with_locus_taxonomy(loci, genes)
+    case_loci = loci.filter(pl.col("analyte") == "CO")["locus_id"].to_list()
+    control_loci = loci.filter(pl.col("analyte") == "CN")["locus_id"].to_list()
+    return run_enrichment_robustness(
         genes.filter(pl.col("locus_id").is_in(case_loci)),
         genes.filter(pl.col("locus_id").is_in(control_loci)),
         analyte="CO",
         case_definition="RefSeq corpus CO anchor neighborhoods",
         control_definition="RefSeq corpus CN anchor neighborhoods",
+        stratum_column=stratum_column,
         alpha=alpha,
+    )
+
+
+def _genes_with_locus_taxonomy(loci: pl.DataFrame, genes: pl.DataFrame) -> pl.DataFrame:
+    taxonomy_columns = ["locus_id"] + [
+        column
+        for column in ("organism", "taxon_id", "genus", "family")
+        if column in loci.columns and column not in genes.columns
+    ]
+    if len(taxonomy_columns) == 1:
+        return genes
+    return genes.join(
+        loci.select(taxonomy_columns).unique("locus_id"),
+        on="locus_id",
+        how="left",
     )
 
 
@@ -155,7 +219,16 @@ def run_corpus_discovery(
     enrichment = _enrichment(
         scored_loci,
         genes,
+        test=config.scoring.enrichment.test,
         alpha=config.scoring.enrichment.alpha,
+        stratum_column=config.scoring.enrichment.stratum_column,
+        strict_policy=config.scoring.enrichment.strict_policy,
+    )
+    enrichment_robustness = _enrichment_robustness(
+        scored_loci,
+        genes,
+        alpha=config.scoring.enrichment.alpha,
+        stratum_column=config.scoring.enrichment.stratum_column,
     )
     candidates = score_candidates(scored_loci, genes, config.scoring, enrichment)
     archetypes = cluster_archetypes(scored_loci, candidates)
@@ -176,6 +249,7 @@ def run_corpus_discovery(
         genes=genes,
         candidates=candidates,
         enrichment=enrichment,
+        enrichment_robustness=enrichment_robustness,
         archetypes=archetypes,
         sensor_regulator_pairs=sensor_regulator_pairs,
     )

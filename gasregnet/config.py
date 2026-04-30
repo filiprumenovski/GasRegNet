@@ -36,11 +36,15 @@ class AnalyteConfig(StrictModel):
 
 
 class EnrichmentConfig(StrictModel):
-    test: Literal["fisher"]
+    test: Literal["fisher", "cmh"]
     multiple_comparison: Literal["benjamini_hochberg"]
     alpha: float = Field(gt=0.0, le=1.0)
     case_control_ratio: tuple[int, int]
     permutations: int = Field(gt=0)
+    stratum_column: str = "genus"
+    strict_policy: Literal["none", "one_per_genus", "one_per_family"] = (
+        "one_per_family"
+    )
 
 
 class WindowConfig(StrictModel):

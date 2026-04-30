@@ -4,14 +4,25 @@ import polars as pl
 import pytest
 from statsmodels.stats.multitest import multipletests  # type: ignore[import-untyped]
 
-from gasregnet.scoring.enrichment import run_enrichment
+from gasregnet.scoring.enrichment import (
+    run_enrichment,
+    run_enrichment_robustness,
+    run_stratified_enrichment,
+)
 
 
 def _genes(
     locus_ids: list[str],
     regulator_classes: list[str],
     sensory_domains: list[list[str]],
+    *,
+    genera: list[str] | None = None,
+    families: list[str] | None = None,
 ) -> pl.DataFrame:
+    if genera is None:
+        genera = ["unknown"] * len(locus_ids)
+    if families is None:
+        families = genera
     return pl.DataFrame(
         {
             "locus_id": locus_ids,
@@ -41,6 +52,8 @@ def _genes(
             "is_regulator_candidate": [
                 regulator_class != "none" for regulator_class in regulator_classes
             ],
+            "genus": genera,
+            "family": families,
         },
     )
 
@@ -110,3 +123,74 @@ def test_run_enrichment_returns_empty_schema_for_no_features() -> None:
         "q_value",
         "interpretation",
     }
+
+
+def test_stratified_enrichment_suppresses_genus_confounding() -> None:
+    case_genes = _genes(
+        [f"case{i}" for i in range(20)],
+        ["one_component"] * 20,
+        [[] for _ in range(20)],
+        genera=["Pseudomonas"] * 20,
+        families=["Pseudomonadaceae"] * 20,
+    )
+    control_genes = _genes(
+        [f"ctrl{i}" for i in range(20)],
+        ["none"] * 20,
+        [[] for _ in range(20)],
+        genera=[f"Genus{i // 4}" for i in range(20)],
+        families=[f"Family{i // 4}" for i in range(20)],
+    )
+
+    fisher = run_enrichment(
+        case_genes,
+        control_genes,
+        analyte="CO",
+        case_definition="case",
+        control_definition="control",
+    )
+    cmh = run_stratified_enrichment(
+        case_genes,
+        control_genes,
+        analyte="CO",
+        case_definition="case",
+        control_definition="control",
+        stratum_column="genus",
+        deduplication_policy="none",
+    )
+
+    fisher_row = fisher.filter(pl.col("feature_name") == "one_component")
+    cmh_row = cmh.filter(pl.col("feature_name") == "one_component")
+    assert fisher_row["q_value"].item() < 0.01
+    assert cmh_row["q_value"].item() > 0.05
+
+
+def test_enrichment_robustness_emits_three_policy_q_value_sets() -> None:
+    case_genes = _genes(
+        ["case1", "case2", "case3"],
+        ["one_component", "one_component", "none"],
+        [["PAS"], [], []],
+        genera=["A", "B", "B"],
+        families=["FamA", "FamB", "FamB"],
+    )
+    control_genes = _genes(
+        ["ctrl1", "ctrl2", "ctrl3"],
+        ["none", "none", "one_component"],
+        [[], [], []],
+        genera=["A", "B", "C"],
+        families=["FamA", "FamB", "FamC"],
+    )
+
+    robustness = run_enrichment_robustness(
+        case_genes,
+        control_genes,
+        analyte="CO",
+        case_definition="case",
+        control_definition="control",
+    )
+
+    assert set(robustness["deduplication_policy"].to_list()) == {
+        "none",
+        "one_per_genus",
+        "one_per_family",
+    }
+    assert robustness.filter(pl.col("feature_name") == "one_component").height == 3

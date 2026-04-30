@@ -160,6 +160,22 @@ def enrichment_frame() -> pl.DataFrame:
     )
 
 
+def enrichment_robustness_frame() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "analyte": ["CO"],
+            "feature_type": ["sensory_domain"],
+            "feature_name": ["PAS"],
+            "deduplication_policy": ["one_per_family"],
+            "stratum_column": ["genus"],
+            "test": ["cmh"],
+            "q_value": [0.01],
+            "p_value": [0.001],
+            "odds_ratio": [20.0],
+        },
+    )
+
+
 def benchmark_frame() -> pl.DataFrame:
     return pl.DataFrame(
         {
@@ -188,6 +204,7 @@ def benchmark_frame() -> pl.DataFrame:
         (schemas.RegulatorCandidatesSchema, candidates_frame),
         (schemas.ArchetypesSchema, archetypes_frame),
         (schemas.EnrichmentResultsSchema, enrichment_frame),
+        (schemas.EnrichmentRobustnessSchema, enrichment_robustness_frame),
         (schemas.BenchmarkSchema, benchmark_frame),
     ],
 )
@@ -207,6 +224,7 @@ def test_schema_accepts_valid_frame(
         (schemas.RegulatorCandidatesSchema, candidates_frame),
         (schemas.ArchetypesSchema, archetypes_frame),
         (schemas.EnrichmentResultsSchema, enrichment_frame),
+        (schemas.EnrichmentRobustnessSchema, enrichment_robustness_frame),
         (schemas.BenchmarkSchema, benchmark_frame),
     ],
 )
@@ -229,6 +247,7 @@ def test_schema_rejects_missing_column(
         (schemas.RegulatorCandidatesSchema, candidates_frame),
         (schemas.ArchetypesSchema, archetypes_frame),
         (schemas.EnrichmentResultsSchema, enrichment_frame),
+        (schemas.EnrichmentRobustnessSchema, enrichment_robustness_frame),
         (schemas.BenchmarkSchema, benchmark_frame),
     ],
 )

@@ -221,6 +221,33 @@ EnrichmentResultsSchema = _schema(
     },
 )
 
+EnrichmentRobustnessSchema = _schema(
+    {
+        "analyte": _column(pl.Utf8, checks=pa.Check.isin(ANALYTES)),
+        "feature_type": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(
+                [
+                    "regulator_family",
+                    "sensory_domain",
+                    "regulator_class",
+                    "archetype",
+                ],
+            ),
+        ),
+        "feature_name": _column(pl.Utf8),
+        "deduplication_policy": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(["none", "one_per_genus", "one_per_family"]),
+        ),
+        "stratum_column": _column(pl.Utf8),
+        "test": _column(pl.Utf8, checks=pa.Check.isin(["cmh", "fisher"])),
+        "q_value": _column(pl.Float64, checks=pa.Check.in_range(0.0, 1.0)),
+        "p_value": _column(pl.Float64, checks=pa.Check.in_range(0.0, 1.0)),
+        "odds_ratio": _column(pl.Float64),
+    },
+)
+
 BenchmarkSchema = _schema(
     {
         "benchmark_id": _column(pl.Utf8),

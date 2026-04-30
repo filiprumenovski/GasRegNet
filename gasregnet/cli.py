@@ -49,13 +49,18 @@ from gasregnet.schemas import (
     AnchorHitsSchema,
     ArchetypesSchema,
     EnrichmentResultsSchema,
+    EnrichmentRobustnessSchema,
     GenesSchema,
     LociSchema,
     RegulatorCandidatesSchema,
     SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
-from gasregnet.scoring.enrichment import run_enrichment
+from gasregnet.scoring.enrichment import (
+    run_enrichment,
+    run_enrichment_robustness,
+    run_stratified_enrichment,
+)
 from gasregnet.scoring.loci import score_loci
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
 
@@ -993,18 +998,46 @@ def enrich_command(
     control_loci = loci.filter(pl.col("analyte") == control_analyte)[
         "locus_id"
     ].to_list()
-    enrichment = run_enrichment(
-        genes.filter(pl.col("locus_id").is_in(case_loci)),
-        genes.filter(pl.col("locus_id").is_in(control_loci)),
-        analyte=case_analyte,
-        case_definition=f"{case_analyte} scored loci",
-        control_definition=f"{control_analyte} scored loci",
-        alpha=cfg.scoring.enrichment.alpha,
-    )
+    case_genes = genes.filter(pl.col("locus_id").is_in(case_loci))
+    control_genes = genes.filter(pl.col("locus_id").is_in(control_loci))
+    if cfg.scoring.enrichment.test == "cmh":
+        enrichment = run_stratified_enrichment(
+            case_genes,
+            control_genes,
+            analyte=case_analyte,
+            case_definition=f"{case_analyte} scored loci",
+            control_definition=f"{control_analyte} scored loci",
+            stratum_column=cfg.scoring.enrichment.stratum_column,
+            alpha=cfg.scoring.enrichment.alpha,
+            deduplication_policy=cfg.scoring.enrichment.strict_policy,
+        )
+    else:
+        enrichment = run_enrichment(
+            case_genes,
+            control_genes,
+            analyte=case_analyte,
+            case_definition=f"{case_analyte} scored loci",
+            control_definition=f"{control_analyte} scored loci",
+            alpha=cfg.scoring.enrichment.alpha,
+        )
     write_parquet(
         enrichment,
         out / "intermediate" / "enrichment.parquet",
         EnrichmentResultsSchema,
+    )
+    enrichment_robustness = run_enrichment_robustness(
+        case_genes,
+        control_genes,
+        analyte=case_analyte,
+        case_definition=f"{case_analyte} scored loci",
+        control_definition=f"{control_analyte} scored loci",
+        stratum_column=cfg.scoring.enrichment.stratum_column,
+        alpha=cfg.scoring.enrichment.alpha,
+    )
+    write_parquet(
+        enrichment_robustness,
+        out / "intermediate" / "enrichment_robustness.parquet",
+        EnrichmentRobustnessSchema,
     )
     resolve_and_dump(cfg, out)
     write_manifest(
