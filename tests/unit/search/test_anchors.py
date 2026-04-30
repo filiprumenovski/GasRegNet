@@ -11,7 +11,7 @@ from gasregnet.search.anchors import detect_anchors_profile
 
 def _catalog(tmp_path: Path) -> Path:
     protein_faa = tmp_path / "proteins.faa"
-    protein_faa.write_text(">NP_TRUE.1 true anchor\nMA\n", encoding="utf-8")
+    protein_faa.write_text(">NP_TRUE.1 true anchor\nMLDIV\n", encoding="utf-8")
     db = tmp_path / "mini.duckdb"
     with duckdb.connect(str(db)) as connection:
         connection.execute(
@@ -27,7 +27,7 @@ def _catalog(tmp_path: Path) -> Path:
         connection.execute(
             """
             insert into proteins values
-                ('NP_TRUE.1', 'cytochrome bd oxidase subunit I', 'MA', 2)
+                ('NP_TRUE.1', 'cytochrome bd oxidase subunit I', 'MLDIV', 5)
             """,
         )
         connection.execute(
@@ -103,6 +103,7 @@ def test_detect_anchors_profile_normalizes_hmmer_hits(
         root=tmp_path,
         profile_dir=tmp_path / "profiles",
         e_value_threshold=1e-20,
+        back_confirm_coverage=0.0,
     )
 
     assert hits.height == 1
@@ -111,4 +112,6 @@ def test_detect_anchors_profile_normalizes_hmmer_hits(
     assert hits["anchor_family"].item() == "cydA"
     assert hits["protein_accession"].item() == "NP_TRUE.1"
     assert hits["locus_tag"].item() == "b0001"
-    assert hits["evidence_type"].item() == "hmmer"
+    assert hits["evidence_type"].item() == "seed_back_confirmed"
+    assert hits["identity"].item() > 0.0
+    assert hits["coverage"].item() > 0.0

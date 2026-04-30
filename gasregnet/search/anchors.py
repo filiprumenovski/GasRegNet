@@ -8,8 +8,9 @@ from typing import Any
 import duckdb
 import polars as pl
 
-from gasregnet.config import GasRegNetConfig, load_config
+from gasregnet.config import AnalyteConfig, GasRegNetConfig, load_config
 from gasregnet.datasets.refseq import read_refseq_catalog_manifest
+from gasregnet.io.fasta import read_fasta
 from gasregnet.schemas import AnchorHitsSchema, validate
 from gasregnet.search.hmmer import hmmsearch
 
@@ -45,6 +46,7 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
                 "locus_tag": pl.Utf8,
                 "gene": pl.Utf8,
                 "product": pl.Utf8,
+                "sequence": pl.Utf8,
             },
         )
     with duckdb.connect(str(db), read_only=True) as connection:
@@ -54,7 +56,8 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
                 proteins.protein_accession,
                 coalesce(features.locus_tag, '') as locus_tag,
                 coalesce(features.gene, '') as gene,
-                coalesce(features.product, proteins.description) as product
+                coalesce(features.product, proteins.description) as product,
+                proteins.sequence
             from proteins
             left join features using (protein_accession)
             where proteins.protein_accession in (
@@ -63,6 +66,79 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
             """,
             [protein_accessions],
         ).pl()
+
+
+def _gene_symbol(description: str) -> str:
+    for token in description.split():
+        if token.startswith("GN="):
+            return token.removeprefix("GN=")
+    return ""
+
+
+def _seed_for_family(analyte: AnalyteConfig, anchor_family: str) -> str:
+    records = list(read_fasta(analyte.anchor_seeds))
+    family_lower = anchor_family.lower()
+    for _accession, description, sequence in records:
+        if _gene_symbol(description).lower() == family_lower:
+            return sequence
+    for _accession, description, sequence in records:
+        if family_lower in description.lower():
+            return sequence
+    return records[0][2]
+
+
+def _seed_sequences(config: GasRegNetConfig) -> dict[str, dict[str, str]]:
+    seeds: dict[str, dict[str, str]] = {}
+    for analyte in config.analytes:
+        seeds[analyte.analyte] = {
+            family.name: _seed_for_family(analyte, family.name)
+            for family in analyte.anchor_families
+        }
+    return seeds
+
+
+def _sequence_match(query: str, seed: str) -> tuple[float, float]:
+    query = query.replace("*", "")
+    seed = seed.replace("*", "")
+    if not query or not seed:
+        return 0.0, 0.0
+    aligned = min(len(query), len(seed))
+    matches = sum(1 for left, right in zip(query, seed, strict=False) if left == right)
+    identity = matches / aligned if aligned else 0.0
+    coverage = aligned / max(len(query), len(seed))
+    return identity, coverage
+
+
+def _back_confirm(
+    *,
+    sequence: object,
+    analyte: str,
+    anchor_family: str,
+    seeds_by_analyte: dict[str, dict[str, str]],
+    identity_threshold: float,
+    coverage_threshold: float,
+) -> dict[str, object]:
+    best_family = ""
+    best_identity = 0.0
+    best_coverage = 0.0
+    for seed_family, seed_sequence in seeds_by_analyte.get(analyte, {}).items():
+        identity, coverage = _sequence_match(str(sequence), seed_sequence)
+        if (identity, coverage) > (best_identity, best_coverage):
+            best_family = seed_family
+            best_identity = identity
+            best_coverage = coverage
+    evidence_type = "profile_match"
+    if (
+        best_family == anchor_family
+        and best_identity >= identity_threshold
+        and best_coverage >= coverage_threshold
+    ):
+        evidence_type = "seed_back_confirmed"
+    return {
+        "evidence_type": evidence_type,
+        "identity": best_identity,
+        "coverage": best_coverage,
+    }
 
 
 def _family_guard_terms(anchor_family: str) -> tuple[str, ...]:
@@ -94,6 +170,9 @@ def _hits_for_family(
     profile_hmm: Path,
     e_value_threshold: float,
     bitscore_threshold: float | None,
+    seeds_by_analyte: dict[str, dict[str, str]],
+    back_confirm_identity: float,
+    back_confirm_coverage: float,
 ) -> pl.DataFrame:
     hits = hmmsearch(profile_hmm, protein_faa, e_value=e_value_threshold)
     if hits.is_empty():
@@ -123,12 +202,8 @@ def _hits_for_family(
                 pl.col("product").fill_null("").alias("product"),
                 pl.col("score").alias("bitscore"),
                 pl.col("evalue").alias("e_value"),
-                pl.lit(None, dtype=pl.Float64).alias("identity"),
-                pl.lit(None, dtype=pl.Float64).alias("coverage"),
-                pl.lit("hmmer").alias("evidence_type"),
             ],
         )
-        .select(list(ANCHOR_HITS_SCHEMA))
         .filter(
             pl.struct(
                 ["protein_accession", "locus_tag", "gene", "product"],
@@ -137,6 +212,27 @@ def _hits_for_family(
                 return_dtype=pl.Boolean,
             ),
         )
+        .with_columns(
+            pl.struct(["sequence"]).map_elements(
+                lambda row: _back_confirm(
+                    sequence=row["sequence"],
+                    analyte=analyte,
+                    anchor_family=anchor_family,
+                    seeds_by_analyte=seeds_by_analyte,
+                    identity_threshold=back_confirm_identity,
+                    coverage_threshold=back_confirm_coverage,
+                ),
+                return_dtype=pl.Struct(
+                    {
+                        "evidence_type": pl.Utf8,
+                        "identity": pl.Float64,
+                        "coverage": pl.Float64,
+                    },
+                ),
+            ).alias("back_confirmation"),
+        )
+        .unnest("back_confirmation")
+        .select(list(ANCHOR_HITS_SCHEMA))
         .unique(
             subset=[
                 "dataset_name",
@@ -158,11 +254,14 @@ def detect_anchors_profile(
     profile_dir: Path,
     bitscore_threshold: float | None = None,
     e_value_threshold: float = 1e-20,
+    back_confirm_identity: float = 0.25,
+    back_confirm_coverage: float = 0.5,
 ) -> pl.DataFrame:
     """Run HMM profile anchor detection against RefSeq catalog protein FASTAs."""
 
     catalogs = read_refseq_catalog_manifest(manifest, root=root)
     loaded_config = load_config(config) if isinstance(config, Path) else config
+    seeds_by_analyte = _seed_sequences(loaded_config)
     frames: list[pl.DataFrame] = []
     for catalog in catalogs.iter_rows(named=True):
         dataset_name = str(catalog["dataset_name"])
@@ -180,6 +279,9 @@ def detect_anchors_profile(
                     profile_hmm=profile_hmm,
                     e_value_threshold=e_value_threshold,
                     bitscore_threshold=bitscore_threshold,
+                    seeds_by_analyte=seeds_by_analyte,
+                    back_confirm_identity=back_confirm_identity,
+                    back_confirm_coverage=back_confirm_coverage,
                 )
                 if not family_hits.is_empty():
                     frames.append(family_hits)

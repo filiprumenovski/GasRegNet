@@ -23,7 +23,14 @@ REGULATOR_CLASSES = [
     "antiterminator",
     "none",
 ]
-ANCHOR_EVIDENCE_TYPES = ["term_scan", "diamond", "hmmer"]
+ANCHOR_EVIDENCE_TYPES = [
+    "term_scan",
+    "hmmer",
+    "profile_match",
+    "seed_back_confirmed",
+    "diamond_back_confirmed",
+    "diamond",
+]
 SENSOR_ROLES = ["anchor", "regulator", "sensor", "both", "accessory", "none"]
 
 

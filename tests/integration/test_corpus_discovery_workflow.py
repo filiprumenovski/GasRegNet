@@ -26,7 +26,8 @@ def test_corpus_discovery_profile_mode_recovers_ecoli_cyd_anchors(
     recovered = set(anchor_hits["gene"].to_list())
     assert marker == out_dir / "README.txt"
     assert {"cydA", "cydB", "cydX"}.issubset(recovered)
-    assert set(anchor_hits["evidence_type"].to_list()) == {"hmmer"}
+    assert "seed_back_confirmed" in set(anchor_hits["evidence_type"].to_list())
+    assert anchor_hits["identity"].drop_nulls().min() > 0.0
     assert candidates.height >= 1
     assert "NP_415258.1" in set(candidates["gene_accession"].to_list())
     assert (out_dir / "intermediate" / "enrichment_robustness.parquet").exists()
