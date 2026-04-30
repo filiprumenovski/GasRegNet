@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from scripts.fetch_assets import fetch_assets
+from gasregnet.assets import fetch_assets
 
 
 def test_fetch_assets_concatenates_urls_and_checks_hash(tmp_path: Path) -> None:

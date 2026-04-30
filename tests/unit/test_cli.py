@@ -18,6 +18,7 @@ def test_help_lists_core_subcommands() -> None:
     assert result.exit_code == 0
     for command in (
         "validate-config",
+        "fetch-assets",
         "build-benchmark",
         "run-sqlite",
         "diamond-search",
@@ -47,6 +48,41 @@ def test_validate_config_writes_run_metadata(tmp_path: Path) -> None:
     assert "config valid" in result.output
     assert (tmp_path / "config.resolved.yaml").exists()
     assert (tmp_path / "manifest.json").exists()
+
+
+def test_fetch_assets_command_writes_manifest_outputs(tmp_path: Path) -> None:
+    source = tmp_path / "source.faa"
+    source.write_text(">seed\nMA\n", encoding="utf-8")
+    manifest = tmp_path / "assets.yaml"
+    manifest.write_text(
+        f"""
+assets:
+  - name: seed
+    output: imported/seed.faa
+    urls:
+      - {source.as_uri()}
+""",
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "fetch-assets",
+            "--manifest",
+            str(manifest),
+            "--root",
+            str(tmp_path),
+            "--downloader",
+            "urllib",
+            "--force",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "imported" / "seed.faa").read_text(encoding="utf-8") == (
+        ">seed\nMA\n"
+    )
 
 
 def test_build_benchmark_writes_csv_header(tmp_path: Path) -> None:

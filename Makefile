@@ -11,7 +11,7 @@ test:
 	uv run pytest -q --cov=gasregnet
 
 assets:
-	uv run python scripts/fetch_assets.py --manifest configs/assets.yaml --force
+	uv run gasregnet fetch-assets --manifest configs/assets.yaml --force
 
 repro:
 	uv run snakemake -s workflows/sqlite_mode.smk --cores 1

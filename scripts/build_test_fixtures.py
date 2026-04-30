@@ -27,6 +27,8 @@ def build_mini_efi(path: Path = MINI_EFI) -> Path:
         connection.execute("INSTALL sqlite")
         connection.execute("LOAD sqlite")
         connection.execute(f"ATTACH '{quoted_path}' AS fixture (TYPE SQLITE)")
+        connection.execute("drop table if exists fixture.genes")
+        connection.execute("drop table if exists fixture.neighborhoods")
         connection.execute(
             """
             create table fixture.neighborhoods (

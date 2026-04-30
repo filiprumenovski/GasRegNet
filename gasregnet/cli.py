@@ -9,6 +9,7 @@ import polars as pl
 from gasregnet.annotation.domains import annotate_domains
 from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.archetypes.cluster import cluster_archetypes
+from gasregnet.assets import Downloader, fetch_assets
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
@@ -101,6 +102,50 @@ def _fallback_benchmark(candidates_path: Path) -> Path:
         encoding="utf-8",
     )
     return output
+
+
+@app.command("fetch-assets", help="Fetch external assets declared in a manifest.")
+@click.option(
+    "--manifest",
+    default=Path("configs/assets.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="YAML asset manifest.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative output paths.",
+)
+@click.option(
+    "--downloader",
+    type=click.Choice(["auto", "wget", "urllib"]),
+    default="auto",
+    show_default=True,
+    help="Download backend. auto prefers wget when installed.",
+)
+@click.option("--force", is_flag=True, help="Refetch existing assets.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def fetch_assets_command(
+    manifest: Path,
+    root: Path,
+    downloader: Downloader,
+    force: bool,
+    verbose: bool,
+) -> None:
+    """Fetch external assets declared in a manifest."""
+
+    configure_logging(verbose=verbose)
+    written = fetch_assets(
+        manifest,
+        root=root,
+        downloader=downloader,
+        force=force,
+    )
+    for path in written:
+        click.echo(path)
 
 
 @app.command("validate-config", help="Validate a composed GasRegNet configuration.")
