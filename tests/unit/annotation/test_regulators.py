@@ -63,3 +63,22 @@ def test_classify_regulators_marks_non_matches_as_unknown() -> None:
     assert classified["functional_class"].item() == "unknown"
     assert classified["regulator_class"].item() == "none"
     assert classified["is_regulator_candidate"].item() is False
+
+
+def test_classify_regulators_uses_text_fallback_for_unannotated_refseq_rows() -> None:
+    config = load_config("configs")
+    genes = genes_frame().with_columns(
+        pl.Series("pfam_ids", [[]], dtype=pl.List(pl.Utf8)),
+        pl.lit("DNA-binding transcriptional repressor YbgA").alias(
+            "product_description",
+        ),
+        pl.lit(False).alias("is_anchor"),
+        pl.lit(-3).cast(pl.Int32).alias("relative_index"),
+        pl.lit("unknown").alias("functional_class"),
+    )
+
+    classified = classify_regulators(genes, config.regulator_families)
+
+    assert classified["functional_class"].item() == "regulator"
+    assert classified["regulator_class"].item() == "one_component"
+    assert classified["is_regulator_candidate"].item() is True

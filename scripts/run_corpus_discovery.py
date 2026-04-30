@@ -9,6 +9,7 @@ from typing import Any
 import polars as pl
 import yaml  # type: ignore[import-untyped]
 
+from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.annotation.roles import (
     assign_sensor_roles,
     build_sensor_regulator_pairs,
@@ -212,6 +213,7 @@ def run_corpus_discovery(
         root=root,
         window_genes=window_genes,
     )
+    genes = classify_regulators(genes, config.regulator_families)
     genes = assign_sensor_roles(
         genes,
         regulator_families=config.regulator_families,

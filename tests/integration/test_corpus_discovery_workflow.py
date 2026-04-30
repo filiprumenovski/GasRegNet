@@ -22,8 +22,11 @@ def test_corpus_discovery_profile_mode_recovers_ecoli_cyd_anchors(
     )
 
     anchor_hits = pl.read_parquet(out_dir / "intermediate" / "anchor_hits.parquet")
+    candidates = pl.read_parquet(out_dir / "intermediate" / "candidates.parquet")
     recovered = set(anchor_hits["gene"].to_list())
     assert marker == out_dir / "README.txt"
     assert {"cydA", "cydB", "cydX"}.issubset(recovered)
     assert set(anchor_hits["evidence_type"].to_list()) == {"hmmer"}
+    assert candidates.height >= 1
+    assert "NP_415258.1" in set(candidates["gene_accession"].to_list())
     assert (out_dir / "intermediate" / "enrichment_robustness.parquet").exists()

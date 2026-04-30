@@ -53,6 +53,29 @@ def _classify_regulator(
     if not scores:
         return "none"
     return max(scores.items(), key=lambda item: (item[1][0], item[1][1]))[0]
+
+
+def _classify_regulator_text(product_description: object) -> str:
+    product = str(product_description).lower()
+    if "anti-sigma" in product or "antisigma" in product:
+        return "anti_sigma"
+    if "sigma factor" in product or "rna polymerase sigma" in product:
+        return "sigma"
+    if "response regulator" in product:
+        return "two_component_rr"
+    if (
+        "histidine kinase" in product
+        or "sensor kinase" in product
+        or "hybrid sensor" in product
+    ):
+        return "two_component_hk"
+    if (
+        "dna-binding transcriptional" in product
+        or "transcriptional regulator" in product
+        or "transcriptional repressor" in product
+        or "transcriptional activator" in product
+    ):
+        return "one_component"
     return "none"
 
 
@@ -67,6 +90,8 @@ def classify_regulators(
         updated = dict(row)
         pfam_ids = {str(pfam_id) for pfam_id in row["pfam_ids"]}
         regulator_class = _classify_regulator(pfam_ids, regulator_families)
+        if regulator_class == "none":
+            regulator_class = _classify_regulator_text(row["product_description"])
         is_candidate = regulator_class != "none"
         updated["regulator_class"] = regulator_class
         updated["is_regulator_candidate"] = is_candidate
