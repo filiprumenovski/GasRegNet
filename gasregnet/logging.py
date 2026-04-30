@@ -11,6 +11,7 @@ def configure_logging(*, verbose: bool = False) -> None:
     """Configure structlog for command-line runs."""
 
     logging.basicConfig(
+        force=True,
         format="%(message)s",
         level=logging.DEBUG if verbose else logging.INFO,
     )
