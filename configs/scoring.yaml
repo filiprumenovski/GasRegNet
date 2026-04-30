@@ -15,6 +15,7 @@ candidate_score_weights:
   archetype_conservation: 1.5
   enrichment: 2.0
   taxonomic_breadth: 0.5
+  phylogenetic_profile: 1.25
   structural_plausibility: 1.5
 
 confidence_thresholds:

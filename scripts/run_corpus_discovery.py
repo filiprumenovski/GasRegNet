@@ -46,12 +46,14 @@ from gasregnet.schemas import (
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
+from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
     run_enrichment,
     run_enrichment_robustness,
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
+from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
 
 
 def _read_corpus_config(path: Path) -> dict[str, Any]:
@@ -250,6 +252,12 @@ def run_corpus_discovery(
         min_loci_per_archetype=1,
         scoring=config.scoring,
     )
+    candidates = assign_phylogenetic_profile_scores(
+        candidates,
+        scored_loci,
+        scoring=config.scoring,
+    )
+    candidates = assign_operon_regulation_posteriors(candidates)
     archetypes = cluster_archetypes(scored_loci, candidates)
     benchmark = evaluate_benchmark(benchmark_csv, anchor_hits, candidates)
 

@@ -61,9 +61,13 @@ def infer_operon_membership(
             row["in_anchor_operon"] = operon_group in anchor_groups
             rows.append(row)
 
-    return pl.DataFrame(rows) if rows else genes.with_columns(
-        pl.lit("").alias("operon_id"),
-        pl.lit(False).alias("in_anchor_operon"),
+    return (
+        pl.DataFrame(rows)
+        if rows
+        else genes.with_columns(
+            pl.lit("").alias("operon_id"),
+            pl.lit(False).alias("in_anchor_operon"),
+        )
     )
 
 

@@ -156,8 +156,7 @@ def assign_sensor_roles(
             is_anchor=bool(row["is_anchor"]),
             regulator_class=regulator_class,
             sensor_evidence=sensor_evidence,
-            has_annotation=_has_annotation(row)
-            or bool(row["is_regulator_candidate"]),
+            has_annotation=_has_annotation(row) or bool(row["is_regulator_candidate"]),
         )
         if regulator_class == "none" and bool(row["is_regulator_candidate"]):
             regulator_class = str(row["regulator_class"])
@@ -205,8 +204,7 @@ def build_sensor_regulator_pairs(
 
     catalog = _sensory_catalog(sensory_domain_catalog)
     analyte_by_locus = {
-        str(row["locus_id"]): str(row["analyte"])
-        for row in loci.iter_rows(named=True)
+        str(row["locus_id"]): str(row["analyte"]) for row in loci.iter_rows(named=True)
     }
     rows: list[dict[str, object]] = []
     for locus_id in genes["locus_id"].unique().to_list():

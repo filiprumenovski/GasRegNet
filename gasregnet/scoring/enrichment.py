@@ -387,7 +387,7 @@ def run_enrichment(
                 case_definition=case_definition,
                 control_definition=control_definition,
             ),
-    )
+        )
 
     if not rows:
         return validate(

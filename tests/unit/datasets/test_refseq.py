@@ -21,8 +21,7 @@ def test_index_refseq_dataset_writes_duckdb_catalog(tmp_path: Path) -> None:
     protein_faa = tmp_path / "proteins.faa.gz"
     with gzip.open(protein_faa, "wt", encoding="utf-8") as handle:
         handle.write(
-            ">NP_000001.1 carbon monoxide dehydrogenase [Example bacterium]\n"
-            "MAGA\n",
+            ">NP_000001.1 carbon monoxide dehydrogenase [Example bacterium]\n" "MAGA\n",
         )
     gff = tmp_path / "genome.gff.gz"
     with gzip.open(gff, "wt", encoding="utf-8") as handle:

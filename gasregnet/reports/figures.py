@@ -87,8 +87,7 @@ def figure_3_archetype_atlas(archetypes: pl.DataFrame, out_dir: Path) -> Path:
         return _empty_figure(out_dir, "figure_3_archetype_atlas", "Archetype atlas")
     top = archetypes.sort("n_loci", descending=True).head(12)
     labels = [
-        f"{row['archetype_id']} ({row['analyte']})"
-        for row in top.iter_rows(named=True)
+        f"{row['archetype_id']} ({row['analyte']})" for row in top.iter_rows(named=True)
     ]
     with plt.style.context(STYLE_PATH):
         fig, ax = plt.subplots(figsize=(7, 4))
@@ -122,19 +121,32 @@ def figure_4_chemistry_partition(enrichment: pl.DataFrame, out_dir: Path) -> Pat
 
 
 def figure_5_candidate_ranking(candidates: pl.DataFrame, out_dir: Path) -> Path:
-    """Render top candidate sensor scores."""
+    """Render top operon-level regulation posteriors."""
 
     if candidates.is_empty():
-        return _empty_figure(out_dir, "figure_5_candidate_ranking", "Candidate ranking")
-    top = candidates.sort("candidate_score", descending=True).head(30)
+        return _empty_figure(
+            out_dir,
+            "figure_5_candidate_ranking",
+            "Operon-level posterior",
+        )
+    score_column = (
+        "regulation_posterior"
+        if "regulation_posterior" in candidates.columns
+        else "candidate_score"
+    )
+    top = candidates.sort(score_column, descending=True).head(30)
     with plt.style.context(STYLE_PATH):
         fig, ax = plt.subplots(figsize=(7, 4.5))
         ax.barh(
             top["candidate_id"].to_list()[::-1],
-            top["candidate_score"].to_list()[::-1],
+            top[score_column].to_list()[::-1],
         )
-        ax.set_xlabel("Candidate score")
-        ax.set_title("Top candidate gas sensors", loc="left")
+        ax.set_xlabel(
+            "P(regulation | locus, motif, conservation, structure)"
+            if score_column == "regulation_posterior"
+            else "Candidate score",
+        )
+        ax.set_title("Operon-level posterior of regulation", loc="left")
         return _save(fig, out_dir, "figure_5_candidate_ranking")
 
 

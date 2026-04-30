@@ -173,6 +173,7 @@ RegulatorCandidatesSchema = _schema(
         "archetype_conservation_score": _column(pl.Float64),
         "enrichment_score": _column(pl.Float64),
         "taxonomic_breadth_score": _column(pl.Float64),
+        "phylogenetic_profile_score": _column(pl.Float64, required=False),
         "structural_plausibility_score": _column(pl.Float64, nullable=True),
         "candidate_score": _column(pl.Float64),
         "candidate_score_q": _column(
@@ -180,6 +181,25 @@ RegulatorCandidatesSchema = _schema(
             checks=pa.Check.in_range(0.0, 1.0),
             nullable=True,
         ),
+        "regulation_posterior": _column(
+            pl.Float64,
+            checks=pa.Check.in_range(0.0, 1.0),
+            required=False,
+            nullable=True,
+        ),
+        "regulation_posterior_hdi_low": _column(
+            pl.Float64,
+            checks=pa.Check.in_range(0.0, 1.0),
+            required=False,
+            nullable=True,
+        ),
+        "regulation_posterior_hdi_high": _column(
+            pl.Float64,
+            checks=pa.Check.in_range(0.0, 1.0),
+            required=False,
+            nullable=True,
+        ),
+        "posterior_evidence_model": _column(pl.Utf8, required=False, nullable=True),
         "rationale": _column(pl.Utf8),
     },
 )

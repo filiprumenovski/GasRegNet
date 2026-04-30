@@ -4,7 +4,9 @@ GasRegNet is a comparative genomics package for discovering candidate bacterial
 gas-sensing transcriptional regulators. It implements the project contracts in
 `ARCHITECTURE.md`, `PREPRINT_PLAN.md`, and `ENGINEERING_PROMPT.md`: validated
 configuration, EFI-GNT SQLite ingestion, DuckDB RefSeq catalogs, corpus anchor
-detection, RefSeq neighborhood extraction, annotation, scoring, enrichment,
+detection, RefSeq neighborhood extraction, annotation, scoring, operon-level
+posterior probabilities of regulation with 94% HDIs, phylogenetic profile
+co-occurrence evidence, synthetic-truth calibration fixtures, enrichment,
 archetype clustering, report tables, figures, captions, manifests, and local
 Snakemake reproducibility paths.
 
@@ -34,8 +36,8 @@ implemented pipeline and writes a complete local report bundle under
 The fixture demonstrates the engineering path. `make corpus-repro` downloads the
 configured RefSeq assets, indexes them into DuckDB, detects smoke-mode anchors,
 extracts RefSeq neighborhoods, and writes a report bundle under
-`results/corpus/`. Smoke-mode anchor detection is term based; DIAMOND/HMMER
-evidence mode is scaffolded as the next scientific upgrade.
+`results/corpus/`. Profile-mode anchor detection uses reproducible HMM profiles
+with seed back-confirmation where local seed evidence supports the hit.
 
 ## Development
 
@@ -60,7 +62,8 @@ under ignored `databases/`.
 writes `results/refseq_anchor_scan.csv`.
 `make corpus-repro` runs the small RefSeq corpus workflow end to end and writes
 `anchor_hits.parquet`, canonical `loci.parquet` and `genes.parquet`, scored
-tables, figures, captions, and a run manifest under `results/corpus/`.
+tables, posterior candidate probabilities, figures, captions, and a run
+manifest under `results/corpus/`.
 
 ## CLI
 
@@ -70,6 +73,7 @@ uv run gasregnet build-benchmark --version v2 --out data/benchmarks/regulators_v
 uv run gasregnet detect-anchors --out results/corpus/intermediate/anchor_hits.parquet
 uv run gasregnet extract-neighborhoods --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus
 uv run gasregnet evaluate-benchmark --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus/tables/T1_benchmark_recovery.csv
+uv run gasregnet simulate-synthetic-truth --out results/synthetic_truth --n-genomes 24 --annotation-noise 0.1
 uv run gasregnet run-sqlite --sqlite tests/fixtures/mini_efi.sqlite --analytes CO --analytes CN --config configs --out results/sqlite_demo
 uv run gasregnet diamond-search --query data/seeds/co_anchor_seeds.faa --db databases/bacteria.dmnd --out cache/co_diamond_hits.parquet
 uv run gasregnet corpus-discovery --out results/corpus

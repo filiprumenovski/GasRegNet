@@ -15,18 +15,24 @@ def test_tool_feature_comparison_marks_gasregnet_features() -> None:
 
     assert gasregnet["matched_control_enrichment"].item() is True
     assert gasregnet["fdr_controlled_candidates"].item() is True
+    assert gasregnet["operon_level_posterior"].item() is True
+    assert gasregnet["phylogenetic_profile_cooccurrence"].item() is True
 
 
 def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> None:
-    benchmark = _loci().select(
-        pl.col("locus_id").alias("benchmark_id"),
-        "analyte",
-    ).with_columns(
-        pl.lit("CooA").alias("protein_name"),
-        pl.lit("Org").alias("organism"),
-        pl.lit(True).alias("hit"),
-        pl.lit(1).alias("rank"),
-        pl.lit(9.0).alias("candidate_score"),
+    benchmark = (
+        _loci()
+        .select(
+            pl.col("locus_id").alias("benchmark_id"),
+            "analyte",
+        )
+        .with_columns(
+            pl.lit("CooA").alias("protein_name"),
+            pl.lit("Org").alias("organism"),
+            pl.lit(True).alias("hit"),
+            pl.lit(1).alias("rank"),
+            pl.lit(9.0).alias("candidate_score"),
+        )
     )
     candidates = pl.concat(
         [

@@ -24,5 +24,7 @@ def test_sqlite_demo_pipeline_writes_report_artifacts(tmp_path: Path) -> None:
     assert (out_dir / "tables" / "T6_tool_feature_comparison.md").exists()
     assert (out_dir / "figures" / "figure_4_chemistry_partition.png").exists()
     assert (
-        out_dir / "captions" / "figure_1_workflow_and_recovery.md"
-    ).read_text(encoding="utf-8").startswith("GasRegNet recovers")
+        (out_dir / "captions" / "figure_1_workflow_and_recovery.md")
+        .read_text(encoding="utf-8")
+        .startswith("GasRegNet recovers")
+    )

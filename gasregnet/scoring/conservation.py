@@ -19,8 +19,13 @@ CANDIDATE_SCHEMA_OVERRIDES: dict[str, Any] = {
     "pfam_ids": pl.List(pl.Utf8),
     "interpro_ids": pl.List(pl.Utf8),
     "archetype_id": pl.Utf8,
+    "phylogenetic_profile_score": pl.Float64,
     "structural_plausibility_score": pl.Float64,
     "candidate_score_q": pl.Float64,
+    "regulation_posterior": pl.Float64,
+    "regulation_posterior_hdi_low": pl.Float64,
+    "regulation_posterior_hdi_high": pl.Float64,
+    "posterior_evidence_model": pl.Utf8,
 }
 
 
@@ -80,14 +85,15 @@ def _candidate_score(row: dict[str, object], scoring: ScoringConfig) -> float:
         float(cast(float, row["locus_score"])) * weights["locus"]
         + float(cast(float, row["regulator_domain_score"]))
         * weights["regulator_domain"]
-        + float(cast(float, row["sensory_domain_score"]))
-        * weights["sensory_domain"]
+        + float(cast(float, row["sensory_domain_score"])) * weights["sensory_domain"]
         + float(cast(float, row["proximity_score"])) * weights["proximity"]
         + float(cast(float, row["archetype_conservation_score"]))
         * weights["archetype_conservation"]
         + float(cast(float, row["enrichment_score"])) * weights["enrichment"]
         + float(cast(float, row["taxonomic_breadth_score"]))
-        * weights["taxonomic_breadth"]
+        * weights.get("taxonomic_breadth", 0.0)
+        + float(cast(float, row.get("phylogenetic_profile_score", 0.0)))
+        * weights.get("phylogenetic_profile", 0.0)
         + structural_component * weights["structural_plausibility"]
     )
 

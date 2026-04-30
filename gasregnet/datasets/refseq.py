@@ -817,9 +817,7 @@ def extract_refseq_neighborhoods(
                     "pfam_descriptions": [],
                     "interpro_ids": [],
                     "interpro_descriptions": [],
-                    "functional_class": "anchor"
-                    if relative_index == 0
-                    else "unknown",
+                    "functional_class": "anchor" if relative_index == 0 else "unknown",
                     "regulator_class": "none",
                     "sensory_domains": [],
                     "is_anchor": relative_index == 0,

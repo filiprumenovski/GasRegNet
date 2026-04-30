@@ -22,9 +22,7 @@ def anchor_marker_score() -> pl.Expr:
     """Score direct gas-marker evidence from marker gene presence."""
 
     return (
-        pl.when(pl.col("marker_genes_present").list.len() > 0)
-        .then(1.0)
-        .otherwise(0.0)
+        pl.when(pl.col("marker_genes_present").list.len() > 0).then(1.0).otherwise(0.0)
     )
 
 
@@ -47,9 +45,7 @@ def homology_confidence_score() -> pl.Expr:
     """Score loci with a non-empty anchor accession as having homology support."""
 
     return (
-        pl.when(pl.col("anchor_accession").str.len_chars() > 0)
-        .then(1.0)
-        .otherwise(0.0)
+        pl.when(pl.col("anchor_accession").str.len_chars() > 0).then(1.0).otherwise(0.0)
     )
 
 
@@ -93,11 +89,9 @@ def score_loci(loci: pl.DataFrame, scoring: ScoringConfig) -> pl.DataFrame:
         (
             pl.col("anchor_marker_score") * weights["anchor_marker"]
             + pl.col("accessory_marker_score") * weights["accessory_marker"]
-            + pl.col("operon_integrity_component_score")
-            * weights["operon_integrity"]
+            + pl.col("operon_integrity_component_score") * weights["operon_integrity"]
             + pl.col("homology_confidence_score") * weights["homology_confidence"]
-            + pl.col("taxonomic_context_component_score")
-            * weights["taxonomic_context"]
+            + pl.col("taxonomic_context_component_score") * weights["taxonomic_context"]
             + pl.col("neighborhood_completeness_score")
             * weights["neighborhood_completeness"]
         ).alias("locus_score"),

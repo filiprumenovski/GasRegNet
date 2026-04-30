@@ -20,12 +20,14 @@ def test_parse_mmseqs_cluster_tsv_marks_representatives(tmp_path: Path) -> None:
 
     assert clusters.height == 3
     assert clusters.columns == ["sequence_id", "cluster_id", "is_representative"]
-    assert clusters.filter(clusters["sequence_id"] == "rep1")[
-        "is_representative"
-    ].item() is True
-    assert clusters.filter(clusters["sequence_id"] == "member1")[
-        "cluster_id"
-    ].item() == "rep1"
+    assert (
+        clusters.filter(clusters["sequence_id"] == "rep1")["is_representative"].item()
+        is True
+    )
+    assert (
+        clusters.filter(clusters["sequence_id"] == "member1")["cluster_id"].item()
+        == "rep1"
+    )
 
 
 def test_parse_mmseqs_cluster_tsv_rejects_missing_file(tmp_path: Path) -> None:

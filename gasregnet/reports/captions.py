@@ -106,15 +106,39 @@ def figure_4_chemistry_partition_caption(enrichment: pl.DataFrame) -> str:
 
 
 def figure_5_candidate_ranking_caption(candidates: pl.DataFrame) -> str:
-    """Caption for decomposable candidate ranking figure."""
+    """Caption for operon-level regulation posterior figure."""
 
-    if "candidate_score_q" in candidates.columns:
-        high_confidence = candidates.filter(pl.col("candidate_score_q") <= 0.05).height
+    if "regulation_posterior" in candidates.columns:
+        high_confidence = candidates.filter(
+            pl.col("regulation_posterior") >= 0.8,
+        ).height
     else:
-        high_confidence = 0
+        high_confidence = (
+            candidates.filter(pl.col("candidate_score_q") <= 0.05).height
+            if "candidate_score_q" in candidates.columns
+            else 0
+        )
     if candidates.is_empty():
-        return "GasRegNet nominated 0 high-confidence candidate sensors in this run."
-    top = candidates.sort("candidate_score", descending=True).row(0, named=True)
+        return (
+            "GasRegNet reports 0 high-posterior operon-level regulation "
+            "hypotheses in this run."
+        )
+    sort_column = (
+        "regulation_posterior"
+        if "regulation_posterior" in candidates.columns
+        else "candidate_score"
+    )
+    top = candidates.sort(sort_column, descending=True).row(0, named=True)
+    if sort_column == "regulation_posterior":
+        return (
+            "GasRegNet reports operon-level posterior probabilities for "
+            "candidate regulation hypotheses, with "
+            f"{high_confidence} candidates at P(regulation)>=0.80; top posterior "
+            f"is {top['candidate_id']} in {top['organism']} "
+            f"(P={_float_text(top['regulation_posterior'])}, 94% HDI "
+            f"[{_float_text(top['regulation_posterior_hdi_low'])}, "
+            f"{_float_text(top['regulation_posterior_hdi_high'])}])."
+        )
     return (
         "GasRegNet nominates "
         f"{high_confidence} high-confidence candidate sensors, headed by "

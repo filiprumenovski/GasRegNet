@@ -14,6 +14,7 @@ TABLE_SPECS = {
         "organism",
         "hit",
         "rank",
+        "regulation_posterior",
         "candidate_score",
     ],
     "T2_top30_co_candidates": [
@@ -21,6 +22,10 @@ TABLE_SPECS = {
         "organism",
         "regulator_class",
         "sensory_domains",
+        "regulation_posterior",
+        "regulation_posterior_hdi_low",
+        "regulation_posterior_hdi_high",
+        "phylogenetic_profile_score",
         "candidate_score",
         "candidate_score_q",
     ],
@@ -29,6 +34,10 @@ TABLE_SPECS = {
         "organism",
         "regulator_class",
         "sensory_domains",
+        "regulation_posterior",
+        "regulation_posterior_hdi_low",
+        "regulation_posterior_hdi_high",
+        "phylogenetic_profile_score",
         "candidate_score",
         "candidate_score_q",
     ],
@@ -53,6 +62,8 @@ TABLE_SPECS = {
         "tool",
         "analyte_general",
         "decomposable_scoring",
+        "operon_level_posterior",
+        "phylogenetic_profile_cooccurrence",
         "matched_control_enrichment",
         "archetype_clustering",
         "structural_prioritization",
@@ -98,6 +109,8 @@ def tool_feature_comparison() -> pl.DataFrame:
             "tool": ["EFI-GNT", "RODEO", "antiSMASH", "FlaGs/webFlaGs", "GasRegNet"],
             "analyte_general": [False, False, False, False, True],
             "decomposable_scoring": [False, False, False, False, True],
+            "operon_level_posterior": [False, False, False, False, True],
+            "phylogenetic_profile_cooccurrence": [False, False, False, False, True],
             "matched_control_enrichment": [False, False, False, False, True],
             "archetype_clustering": [False, True, True, False, True],
             "structural_prioritization": [False, False, False, False, True],
@@ -120,10 +133,20 @@ def write_publication_tables(
     tables = {
         "T1_benchmark_recovery": benchmark_recovery,
         "T2_top30_co_candidates": candidates.filter(pl.col("analyte") == "CO")
-        .sort("candidate_score", descending=True)
+        .sort(
+            "regulation_posterior"
+            if "regulation_posterior" in candidates.columns
+            else "candidate_score",
+            descending=True,
+        )
         .head(30),
         "T3_top30_hcn_candidates": candidates.filter(pl.col("analyte") == "CN")
-        .sort("candidate_score", descending=True)
+        .sort(
+            "regulation_posterior"
+            if "regulation_posterior" in candidates.columns
+            else "candidate_score",
+            descending=True,
+        )
         .head(30),
         "T4_regulator_family_enrichment": enrichment,
         "T5_archetype_catalog": archetypes,

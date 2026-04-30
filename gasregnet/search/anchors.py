@@ -213,7 +213,8 @@ def _hits_for_family(
             ),
         )
         .with_columns(
-            pl.struct(["sequence"]).map_elements(
+            pl.struct(["sequence"])
+            .map_elements(
                 lambda row: _back_confirm(
                     sequence=row["sequence"],
                     analyte=analyte,
@@ -229,7 +230,8 @@ def _hits_for_family(
                         "coverage": pl.Float64,
                     },
                 ),
-            ).alias("back_confirmation"),
+            )
+            .alias("back_confirmation"),
         )
         .unnest("back_confirmation")
         .select(list(ANCHOR_HITS_SCHEMA))

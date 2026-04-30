@@ -36,6 +36,7 @@ def test_help_lists_core_subcommands() -> None:
         "annotate",
         "assign-roles",
         "score",
+        "simulate-synthetic-truth",
         "enrich",
         "archetypes",
         "report",
@@ -231,6 +232,26 @@ def test_stage_commands_write_scored_enrichment_and_archetypes(tmp_path: Path) -
     assert (enriched / "intermediate" / "enrichment.parquet").exists()
     assert (archetypes / "intermediate" / "archetypes.parquet").exists()
     assert (roles / "intermediate" / "sensor_regulator_pairs.parquet").exists()
+
+
+def test_simulate_synthetic_truth_command_writes_truth_frames(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        [
+            "simulate-synthetic-truth",
+            "--out",
+            str(tmp_path),
+            "--n-genomes",
+            "8",
+            "--annotation-noise",
+            "0",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert (tmp_path / "intermediate" / "loci.parquet").exists()
+    assert (tmp_path / "intermediate" / "genes.parquet").exists()
+    assert (tmp_path / "intermediate" / "synthetic_ground_truth.csv").exists()
 
 
 def test_repro_command_invokes_snakemake(

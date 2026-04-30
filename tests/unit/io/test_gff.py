@@ -19,8 +19,7 @@ def test_parse_attributes_decodes_gff3_values() -> None:
 def test_read_gff3_accepts_version_3(tmp_path: Path) -> None:
     path = tmp_path / "genes.gff3"
     path.write_text(
-        "##gff-version 3\n"
-        "contig\tRefSeq\tCDS\t1\t99\t.\t+\t0\tID=cds1;Name=coxL\n",
+        "##gff-version 3\n" "contig\tRefSeq\tCDS\t1\t99\t.\t+\t0\tID=cds1;Name=coxL\n",
         encoding="utf-8",
     )
 

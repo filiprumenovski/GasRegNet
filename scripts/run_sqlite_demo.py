@@ -38,12 +38,14 @@ from gasregnet.schemas import (
 )
 from gasregnet.scoring.candidates import score_candidates
 from gasregnet.scoring.conservation import compute_conservation_scores
+from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
     run_enrichment,
     run_enrichment_robustness,
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
+from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
 from scripts.build_test_fixtures import build_mini_efi
 
 
@@ -97,8 +99,13 @@ def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
                 "hit": [False],
                 "rank": [None],
                 "candidate_score": [None],
+                "regulation_posterior": [None],
             },
-            schema_overrides={"rank": pl.Int64, "candidate_score": pl.Float64},
+            schema_overrides={
+                "rank": pl.Int64,
+                "candidate_score": pl.Float64,
+                "regulation_posterior": pl.Float64,
+            },
         )
     row = top.row(0, named=True)
     return pl.DataFrame(
@@ -110,8 +117,13 @@ def _benchmark_recovery(candidates: pl.DataFrame) -> pl.DataFrame:
             "hit": [True],
             "rank": [1],
             "candidate_score": [row["candidate_score"]],
+            "regulation_posterior": [row.get("regulation_posterior")],
         },
-        schema_overrides={"rank": pl.Int64, "candidate_score": pl.Float64},
+        schema_overrides={
+            "rank": pl.Int64,
+            "candidate_score": pl.Float64,
+            "regulation_posterior": pl.Float64,
+        },
     )
 
 
@@ -203,6 +215,12 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         min_loci_per_archetype=1,
         scoring=config.scoring,
     )
+    candidates = assign_phylogenetic_profile_scores(
+        candidates,
+        scored_loci,
+        scoring=config.scoring,
+    )
+    candidates = assign_operon_regulation_posteriors(candidates)
     archetypes = cluster_archetypes(scored_loci, candidates)
     benchmark = _benchmark_recovery(candidates)
 

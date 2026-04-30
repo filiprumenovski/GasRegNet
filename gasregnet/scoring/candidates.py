@@ -51,9 +51,14 @@ CANDIDATE_SCHEMA: dict[str, Any] = {
     "archetype_conservation_score": pl.Float64,
     "enrichment_score": pl.Float64,
     "taxonomic_breadth_score": pl.Float64,
+    "phylogenetic_profile_score": pl.Float64,
     "structural_plausibility_score": pl.Float64,
     "candidate_score": pl.Float64,
     "candidate_score_q": pl.Float64,
+    "regulation_posterior": pl.Float64,
+    "regulation_posterior_hdi_low": pl.Float64,
+    "regulation_posterior_hdi_high": pl.Float64,
+    "posterior_evidence_model": pl.Utf8,
     "rationale": pl.Utf8,
 }
 
@@ -129,14 +134,15 @@ def _score_total(row: dict[str, object], scoring: ScoringConfig) -> float:
         float(cast(float, row["locus_score"])) * weights["locus"]
         + float(cast(float, row["regulator_domain_score"]))
         * weights["regulator_domain"]
-        + float(cast(float, row["sensory_domain_score"]))
-        * weights["sensory_domain"]
+        + float(cast(float, row["sensory_domain_score"])) * weights["sensory_domain"]
         + float(cast(float, row["proximity_score"])) * weights["proximity"]
         + float(cast(float, row["archetype_conservation_score"]))
         * weights["archetype_conservation"]
         + float(cast(float, row["enrichment_score"])) * weights["enrichment"]
         + float(cast(float, row["taxonomic_breadth_score"]))
-        * weights["taxonomic_breadth"]
+        * weights.get("taxonomic_breadth", 0.0)
+        + float(cast(float, row.get("phylogenetic_profile_score", 0.0)))
+        * weights.get("phylogenetic_profile", 0.0)
         + structural_component * weights["structural_plausibility"]
     )
 
@@ -149,9 +155,7 @@ def score_candidates(
 ) -> pl.DataFrame:
     """Extract and score regulator candidates near scored loci."""
 
-    locus_lookup = {
-        str(row["locus_id"]): row for row in loci.iter_rows(named=True)
-    }
+    locus_lookup = {str(row["locus_id"]): row for row in loci.iter_rows(named=True)}
     enrichment_scores = _enrichment_lookup(enrichment)
     rows: list[dict[str, object]] = []
 
@@ -188,9 +192,14 @@ def score_candidates(
             "archetype_conservation_score": 0.0,
             "enrichment_score": enrichment_score,
             "taxonomic_breadth_score": 0.0,
+            "phylogenetic_profile_score": 0.0,
             "structural_plausibility_score": None,
             "candidate_score": 0.0,
             "candidate_score_q": q_value,
+            "regulation_posterior": None,
+            "regulation_posterior_hdi_low": None,
+            "regulation_posterior_hdi_high": None,
+            "posterior_evidence_model": None,
             "rationale": "",
         }
         row["candidate_score"] = _score_total(row, scoring)

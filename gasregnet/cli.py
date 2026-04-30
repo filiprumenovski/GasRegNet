@@ -56,13 +56,16 @@ from gasregnet.schemas import (
     SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.cooccurrence import assign_phylogenetic_profile_scores
 from gasregnet.scoring.enrichment import (
     run_enrichment,
     run_enrichment_robustness,
     run_stratified_enrichment,
 )
 from gasregnet.scoring.loci import score_loci
+from gasregnet.scoring.posterior import assign_operon_regulation_posteriors
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
+from gasregnet.simulation.synthetic_truth import simulate_synthetic_truth_corpus
 
 
 @click.group(help="GasRegNet comparative genomics workflows.")
@@ -114,17 +117,24 @@ def _benchmark_from_candidates(candidates_path: Path) -> Path | None:
 def _fallback_benchmark(candidates_path: Path) -> Path:
     candidates = read_parquet(candidates_path, RegulatorCandidatesSchema)
     output = candidates_path.parent / "benchmark_recovery.csv"
+    header = (
+        "benchmark_id,analyte,protein_name,organism,hit,rank,"
+        "regulation_posterior,candidate_score\n"
+    )
     if candidates.is_empty():
-        output.write_text(
-            "benchmark_id,analyte,protein_name,organism,hit,rank,candidate_score\n",
-            encoding="utf-8",
-        )
+        output.write_text(header, encoding="utf-8")
         return output
-    top = candidates.sort("candidate_score", descending=True).row(0, named=True)
+    sort_column = (
+        "regulation_posterior"
+        if "regulation_posterior" in candidates.columns
+        else "candidate_score"
+    )
+    top = candidates.sort(sort_column, descending=True).row(0, named=True)
+    posterior = top.get("regulation_posterior")
     output.write_text(
-        "benchmark_id,analyte,protein_name,organism,hit,rank,candidate_score\n"
-        f"derived_top_candidate,{top['analyte']},{top['gene_accession']},"
-        f"{top['organism']},true,1,{top['candidate_score']}\n",
+        header + f"derived_top_candidate,{top['analyte']},{top['gene_accession']},"
+        f"{top['organism']},true,1,{'' if posterior is None else posterior},"
+        f"{top['candidate_score']}\n",
         encoding="utf-8",
     )
     return output
@@ -1076,6 +1086,12 @@ def score_command(
     genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
     scored_loci = score_loci(loci, cfg.scoring)
     candidates = score_candidates(scored_loci, genes, cfg.scoring)
+    candidates = assign_phylogenetic_profile_scores(
+        candidates,
+        scored_loci,
+        scoring=cfg.scoring,
+    )
+    candidates = assign_operon_regulation_posteriors(candidates)
     locus_columns = [
         column for column in LociSchema.columns if column in scored_loci.columns
     ]
@@ -1103,7 +1119,54 @@ def score_command(
         ),
         out,
     )
-    click.echo(f"wrote scored outputs to {out}")
+
+
+@app.command(
+    "simulate-synthetic-truth",
+    help="Generate synthetic known-truth genomes for calibration tests.",
+)
+@click.option("--out", required=True, type=click.Path(path_type=Path))
+@click.option("--n-genomes", default=24, show_default=True, type=int)
+@click.option("--positive-fraction", default=0.5, show_default=True, type=float)
+@click.option("--phylogenetic-clumping", default=0.7, show_default=True, type=float)
+@click.option("--annotation-noise", default=0.1, show_default=True, type=float)
+@click.option("--seed", default=20260430, show_default=True, type=int)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def simulate_synthetic_truth_command(
+    out: Path,
+    n_genomes: int,
+    positive_fraction: float,
+    phylogenetic_clumping: float,
+    annotation_noise: float,
+    seed: int,
+    verbose: bool,
+) -> None:
+    """Write loci, genes, and ground truth frames for calibration runs."""
+
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    corpus = simulate_synthetic_truth_corpus(
+        n_genomes=n_genomes,
+        positive_fraction=positive_fraction,
+        phylogenetic_clumping=phylogenetic_clumping,
+        annotation_noise=annotation_noise,
+        seed=seed,
+    )
+    write_parquet(corpus.loci, out / "intermediate" / "loci.parquet", LociSchema)
+    write_parquet(corpus.genes, out / "intermediate" / "genes.parquet", GenesSchema)
+    ground_truth_path = out / "intermediate" / "synthetic_ground_truth.csv"
+    ground_truth_path.parent.mkdir(parents=True, exist_ok=True)
+    corpus.ground_truth.write_csv(ground_truth_path)
+    write_manifest(
+        build_manifest(
+            seed=seed,
+            command="simulate-synthetic-truth",
+            config_paths={},
+            input_paths={},
+        ),
+        out,
+    )
+    click.echo(f"wrote synthetic truth corpus to {out}")
 
 
 @app.command("enrich", help="Run matched-control enrichment tests.")

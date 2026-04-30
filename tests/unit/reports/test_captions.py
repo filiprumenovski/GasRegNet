@@ -82,6 +82,10 @@ def test_build_and_write_all_caption_files(tmp_path: Path) -> None:
         "figure_5_candidate_ranking",
         "figure_6_structure_hypotheses",
     }
-    assert outputs["figure_4_chemistry_partition"].read_text(
-        encoding="utf-8",
-    ).startswith("Sensory chemistry partitions")
+    assert (
+        outputs["figure_4_chemistry_partition"]
+        .read_text(
+            encoding="utf-8",
+        )
+        .startswith("Sensory chemistry partitions")
+    )

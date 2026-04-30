@@ -41,8 +41,7 @@ def test_read_alignment_fasta_and_conserved_residues(tmp_path: Path) -> None:
 def test_read_plddt_from_pdb_uses_residue_bfactor(tmp_path: Path) -> None:
     pdb = tmp_path / "model.pdb"
     pdb.write_text(
-        _atom_line(1, "MET", 1, bfactor=91.5)
-        + _atom_line(2, "ALA", 2, bfactor=70.0),
+        _atom_line(1, "MET", 1, bfactor=91.5) + _atom_line(2, "ALA", 2, bfactor=70.0),
         encoding="utf-8",
     )
 

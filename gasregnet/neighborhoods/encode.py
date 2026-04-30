@@ -36,8 +36,7 @@ def encode_locus_architecture(
     anchor_family = str(locus["anchor_family"])
     locus_genes = genes.filter(pl.col("locus_id") == locus_id).sort("relative_index")
     tokens = [
-        _gene_token(row, anchor_family)
-        for row in locus_genes.iter_rows(named=True)
+        _gene_token(row, anchor_family) for row in locus_genes.iter_rows(named=True)
     ]
     return "".join(tokens)
 

@@ -42,9 +42,7 @@ class EnrichmentConfig(StrictModel):
     case_control_ratio: tuple[int, int]
     permutations: int = Field(gt=0)
     stratum_column: str = "genus"
-    strict_policy: Literal["none", "one_per_genus", "one_per_family"] = (
-        "one_per_family"
-    )
+    strict_policy: Literal["none", "one_per_genus", "one_per_family"] = "one_per_family"
 
 
 class WindowConfig(StrictModel):
