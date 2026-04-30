@@ -1,0 +1,31 @@
+benchmark_id,analyte,protein_name,uniprot_accession,organism,taxon_id,anchor_family,expected_regulator_class,expected_sensory_domains,sensing_evidence_class,pmid,notes,first_publication,verify_pmid
+co_reg_001,CO,CooA,P72324,Rhodospirillum rubrum,1085,cooS,one_component,heme,direct,9326589,CO-responsive CRP/FNR-family heme regulator; PMID currently points to CO-binding CooA biochemical characterization,Shelver 1997 PNAS; Aono 1996 JBC listed in V2 prompt,true
+co_reg_002,CO,RcoM-1,Q13EP1,Burkholderia xenovorans LB400,266265,coxL,one_component,heme_pas,direct,18326575,Heme-dependent CO sensor regulator upstream of CO oxidation genes,Marvin 2008 JBC,true
+co_reg_003,CO,RcoM-2,Q13EP2,Burkholderia xenovorans LB400,266265,coxL,one_component,heme_pas,direct,18326575,Heme-dependent CO sensor regulator upstream of CO oxidation genes,Marvin 2008 JBC,true
+co_reg_004,CO,FixL,P23222,Bradyrhizobium diazoefficiens,224911,none_in_locus,two_component_hk,heme_pas,direct,1848697,Heme oxygen-sensor histidine kinase,Gilles-Gonzalez 1991 Nature,true
+co_reg_005,CO,EcDOS,P76129,Escherichia coli K-12,511145,none_in_locus,one_component,heme_pas,direct,11970957,Direct oxygen sensor heme-PAS phosphodiesterase inhibited by CO,Sasakura 2002 JBC,false
+co_reg_006,CO,DosS,P9WGK1,Mycobacterium tuberculosis,83332,dosR_regulon,two_component_hk,heme_gaf,direct,17609369,Heme GAF sensor kinase; CO modulates activity,Kumar 2007 PNAS,false
+co_reg_007,CO,DosT,P9WGK3,Mycobacterium tuberculosis,83332,dosR_regulon,two_component_hk,heme_gaf,direct,17609369,Heme GAF sensor kinase; CO modulates activity,Kumar 2007 PNAS,false
+co_reg_008,CO,HemAT,O30739,Bacillus subtilis,224308,none_in_locus,one_component,heme_globin,direct,0,Heme-globin aerotaxis sensor; PMID requires curator confirmation,Hou 2000 PNAS,true
+co_reg_009,CO,NreB,Q7DLR9,Staphylococcus carnosus,1280,nitrate_reductase,two_component_hk,iron_sulfur_pas,direct,0,Oxygen-responsive iron-sulfur sensor kinase; PMID requires curator confirmation,Mullner 2008 J Mol Microbiol Biotechnol,true
+co_reg_010,CO,FNR,P0A9E5,Escherichia coli K-12,511145,various,one_component,iron_sulfur_4Fe4S,direct,7708673,CRP/FNR regulator with oxygen-labile iron-sulfur cluster,Khoroshilova 1997 PNAS,true
+cn_reg_001,CN,ANR,P25856,Pseudomonas aeruginosa PAO1,208964,various incl cyd,one_component,iron_sulfur_4Fe4S,direct,0,FNR-family anaerobic regulator connected to cyanide-tolerant respiration; PMID requires curator confirmation,Sawers 1991 Mol Microbiol,true
+cn_reg_002,CN,MpaR-class regulator,A6UZV9,Pseudomonas aeruginosa PA7,381754,mhp operon,one_component,cysteine_metal,indirect,0,Metal/cysteine regulator class from V2 benchmark; PMID requires curator confirmation,Microbiology 2010 rubric reference,true
+cn_reg_003,CN,ArcA,P0A9Q1,Escherichia coli K-12,511145,cydAB,two_component_rr,none,indirect,0,Response regulator influencing cydAB expression; PMID requires curator confirmation,Iuchi 1988 PNAS,true
+cn_reg_004,CN,ArcB,P0AEC3,Escherichia coli K-12,511145,cydAB,two_component_hk,quinone,indirect,0,Quinone/redox sensor kinase influencing cydAB expression; PMID requires curator confirmation,Iuchi 1990 J Bacteriol,true
+cn_reg_005,CN,Fnr cyanide context,P0A9E5,Escherichia coli K-12,511145,cydAB regulation,one_component,iron_sulfur_4Fe4S,indirect,0,FNR regulator in cydAB/cyanide-respiration context; PMID requires curator confirmation,Cotter 1990 J Bacteriol,true
+cn_reg_006,CN,RoxR,Q88FX6,Pseudomonas putida KT2440,160488,terminal oxidases,two_component_rr,none,indirect,0,Response regulator for terminal oxidase regulation; PMID requires curator confirmation,Comolli 2002 J Bacteriol,true
+cn_reg_007,CN,RoxS,Q88FX5,Pseudomonas putida KT2440,160488,terminal oxidases,two_component_hk,redox_pas,indirect,0,Sensor kinase for terminal oxidase regulation; PMID requires curator confirmation,Comolli 2002 J Bacteriol,true
+cn_reg_008,CN,CydR,,Azotobacter vinelandii,354,cydAB,one_component,iron_sulfur_4Fe4S,direct,0,ANR ortholog regulating cydAB; UniProt accession and PMID require curator confirmation,Wu 2000 Mol Microbiol,true
+cn_reg_009,CN,CynR,P27111,Escherichia coli K-12,511145,cynTSX,one_component,none,indirect,0,Cyanate operon regulator; PMID requires curator confirmation,Anderson 1990 J Bacteriol,true
+cn_reg_010,CN,GcsR,,Pseudomonas aeruginosa,287,hcn operon,sigma54,aaa_atpase,indirect,0,Sigma-54 enhancer-binding regulator for hcn-associated context; UniProt accession and PMID require curator confirmation,Carterson 2004 J Bacteriol,true
+neg_reg_001,negative_control,LacI,P03023,Escherichia coli K-12,511145,,one_component,none,none,0,Classical lactose regulator; no gas biology,negative control,true
+neg_reg_002,negative_control,TetR,P04483,Escherichia coli transposon,562,,one_component,none,none,0,Tetracycline regulator; no gas biology,negative control,true
+neg_reg_003,negative_control,AraC,P0A9E0,Escherichia coli K-12,511145,,one_component,none,none,0,Arabinose regulator; no gas biology,negative control,true
+neg_reg_004,negative_control,TrpR,P0A881,Escherichia coli K-12,511145,,one_component,none,none,0,Tryptophan regulator; no gas biology,negative control,true
+neg_reg_005,negative_control,LexA,P0A7C2,Escherichia coli K-12,511145,,one_component,none,none,0,SOS response regulator; no gas biology,negative control,true
+neg_reg_006,negative_control,GalR,P03024,Escherichia coli K-12,511145,,one_component,none,none,0,Galactose regulator; no gas biology,negative control,true
+neg_reg_007,negative_control,RpoH,P0AGB3,Escherichia coli K-12,511145,,sigma,none,none,0,Heat shock sigma factor; no gas biology,negative control,true
+neg_reg_008,negative_control,BglG,P11546,Escherichia coli K-12,511145,,antiterminator,none,none,0,Sugar antiterminator; no gas biology,negative control,true
+neg_reg_009,negative_control,GlpR,P0ACL0,Escherichia coli K-12,511145,,one_component,none,none,0,Glycerol regulator; no gas biology,negative control,true
+neg_reg_010,negative_control,MalT,P06993,Escherichia coli K-12,511145,,one_component,none,none,0,Maltose regulator; no gas biology,negative control,true

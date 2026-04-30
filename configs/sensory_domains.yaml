@@ -1,34 +1,118 @@
 sensory_domains:
-  - domain: PAS
+  - domain: PAS_generic
     pfam_id: PF00989
-    chemistry: heme
-  - domain: PAS
+    role: sensor
+    chemistry: none
+    notes: "Generic PAS fold. Default chemistry is none; heme, flavin, and ligand-PAS calls require paired evidence."
+  - domain: PAS_9
     pfam_id: PF13426
-    chemistry: heme
-  - domain: PAS
+    role: sensor
+    chemistry: none
+    notes: "PAS subfamily; default none unless paired evidence."
+  - domain: PAS_11
     pfam_id: PF14598
-    chemistry: heme
+    role: sensor
+    chemistry: none
+    notes: "PAS subfamily."
   - domain: GAF
     pfam_id: PF01590
-    chemistry: generic_signal
-  - domain: Cache
+    role: sensor
+    chemistry: cnmp
+    notes: "Default chemistry cyclic-nucleotide; heme-GAF lineages are rescored by paired evidence."
+  - domain: HNOB
+    pfam_id: PF07700
+    role: sensor
+    chemistry: heme
+    notes: "H-NOX heme NO/O2 binding domain."
+  - domain: Globin
+    pfam_id: PF00042
+    role: sensor
+    chemistry: heme
+    notes: "Globin fold; HemAT-like globin-coupled sensors."
+  - domain: Cache_1
     pfam_id: PF02743
-    chemistry: generic_signal
-  - domain: Cache
+    role: sensor
+    chemistry: none
+    notes: "Periplasmic small-molecule sensor; default chemistry none."
+  - domain: Cache_2
     pfam_id: PF13185
-    chemistry: generic_signal
+    role: sensor
+    chemistry: none
+    notes: "Periplasmic small-molecule sensor; default chemistry none."
   - domain: HAMP
     pfam_id: PF00672
-    chemistry: generic_signal
+    role: transducer
+    chemistry: none
+    notes: "Coiled-coil signal transduction; excluded from sensor scoring."
   - domain: CBS
     pfam_id: PF00571
-    chemistry: redox
+    role: sensor
+    chemistry: none
+    notes: "Adenosine-derivative binding; not a redox sensor."
   - domain: GGDEF
     pfam_id: PF00990
-    chemistry: generic_signal
+    role: effector
+    chemistry: none
+    notes: "Diguanylate cyclase output domain; excluded from sensor scoring."
   - domain: EAL
     pfam_id: PF00563
-    chemistry: generic_signal
+    role: effector
+    chemistry: none
+    notes: "c-di-GMP phosphodiesterase output domain; excluded from sensor scoring."
   - domain: HD-GYP
     pfam_id: PF13487
-    chemistry: generic_signal
+    role: effector
+    chemistry: none
+    notes: "c-di-GMP phosphodiesterase output domain; excluded from sensor scoring."
+  - domain: Fer4
+    pfam_id: PF00037
+    role: sensor
+    chemistry: iron_sulfur_4Fe4S
+    notes: "Generic 4Fe-4S binding; FNR-class iron-sulfur sensor."
+  - domain: Fer4_7
+    pfam_id: PF12838
+    role: sensor
+    chemistry: iron_sulfur_4Fe4S
+    notes: "4Fe-4S binding domain."
+  - domain: Fer2
+    pfam_id: PF00111
+    role: sensor
+    chemistry: iron_sulfur_2Fe2S
+    notes: "2Fe-2S binding domain."
+  - domain: Fer2_2
+    pfam_id: PF01799
+    role: sensor
+    chemistry: iron_sulfur_2Fe2S
+    notes: "Common 2Fe-2S domain; downweighted because it is generic."
+  - domain: FAD_binding
+    pfam_id: PF00890
+    role: sensor
+    chemistry: flavin
+    notes: "FAD/FMN binding domain."
+  - domain: cNMP_binding
+    pfam_id: PF00027
+    role: sensor
+    chemistry: cnmp
+    notes: "CooA contains this fold but is rescored to heme by paired evidence."
+  - domain: ArsR_HTH
+    pfam_id: PF01022
+    role: sensor
+    chemistry: cysteine_metal
+    notes: "ArsR/SmtB metalloregulator family; senses metal ions through cysteine clusters."
+
+paired_evidence:
+  - rule_name: cooA_heme_rescore
+    if_pfam_all: ["PF00027"]
+    if_motif_any: ["heme_b_histidine"]
+    rescore:
+      domain: cNMP_binding
+      chemistry: heme
+    notes: "CooA-class cNMP fold with proximal His ligation rescores to heme."
+  - rule_name: dos_gaf_heme
+    if_pfam_all: ["PF01590"]
+    if_co_pfam_any: ["PF00512", "PF02518"]
+    if_organism_kingdom: bacteria
+    rescore:
+      domain: GAF
+      chemistry: heme
+    notes: "GAF in histidine-kinase context is biased toward heme-GAF lineages."

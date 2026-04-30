@@ -104,6 +104,20 @@ def test_build_benchmark_writes_csv_header(tmp_path: Path) -> None:
     assert out.read_text(encoding="utf-8").startswith("benchmark_id,analyte")
 
 
+def test_build_benchmark_v2_writes_regulator_benchmark(tmp_path: Path) -> None:
+    out = tmp_path / "regulators_v2.csv"
+
+    result = runner.invoke(
+        app,
+        ["build-benchmark", "--version", "v2", "--out", str(out)],
+    )
+
+    assert result.exit_code == 0
+    text = out.read_text(encoding="utf-8")
+    assert "CooA" in text
+    assert "verify_pmid" in text
+
+
 def test_report_command_writes_artifacts(tmp_path: Path) -> None:
     results = tmp_path / "results"
     report = tmp_path / "report"

@@ -10,7 +10,11 @@ from gasregnet.annotation.domains import annotate_domains
 from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.assets import Downloader, fetch_assets
-from gasregnet.benchmark import evaluate_benchmark
+from gasregnet.benchmark import (
+    evaluate_benchmark,
+    load_benchmark_csv,
+    write_benchmark_csv,
+)
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.datasets.refseq import (
     detect_refseq_anchor_hits,
@@ -492,7 +496,7 @@ def extract_neighborhoods_command(
 @app.command("evaluate-benchmark", help="Evaluate benchmark recovery.")
 @click.option(
     "--benchmark",
-    default=Path("data/benchmarks/benchmark_v1.csv"),
+    default=Path("data/benchmarks/regulators_v2.csv"),
     show_default=True,
     type=click.Path(path_type=Path),
     help="Benchmark CSV.",
@@ -664,6 +668,18 @@ def diamond_search_command(
 
 @app.command("build-benchmark", help="Create the curated benchmark CSV skeleton.")
 @click.option(
+    "--version",
+    type=click.Choice(["v1", "v2"]),
+    default="v1",
+    show_default=True,
+    help="Benchmark version to build.",
+)
+@click.option(
+    "--source",
+    type=click.Path(path_type=Path),
+    help="Source benchmark CSV for versioned benchmark builds.",
+)
+@click.option(
     "--out",
     required=True,
     type=click.Path(path_type=Path),
@@ -672,15 +688,23 @@ def diamond_search_command(
 @click.option("--seed", default=20260429, show_default=True, help="Random seed.")
 @click.option("--verbose", is_flag=True, help="Enable debug logs.")
 def build_benchmark_command(
+    version: str,
+    source: Path | None,
     out: Path,
     seed: int,
     verbose: bool,
 ) -> None:
-    """Create the curated benchmark CSV skeleton."""
+    """Create a benchmark CSV."""
 
     del seed
     configure_logging(verbose=verbose)
     out.parent.mkdir(parents=True, exist_ok=True)
+    if version == "v2":
+        source_path = source or Path("configs/benchmarks/regulators_v2.csv")
+        benchmark = load_benchmark_csv(source_path)
+        write_benchmark_csv(benchmark, out)
+        click.echo(f"wrote {out}")
+        return
     out.write_text(
         "benchmark_id,analyte,protein_name,uniprot_accession,organism,taxon_id,"
         "anchor_family,expected_regulator_class,expected_sensory_domains,"

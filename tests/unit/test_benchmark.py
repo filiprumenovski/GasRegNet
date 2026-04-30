@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gasregnet.benchmark import evaluate_benchmark
+from gasregnet.benchmark import evaluate_benchmark, load_benchmark_csv
 
 
 def test_evaluate_benchmark_reports_positive_and_negative_recovery(
@@ -46,3 +46,18 @@ def test_evaluate_benchmark_reports_positive_and_negative_recovery(
 
     assert recovery["benchmark_id"].to_list() == ["cn1", "neg1"]
     assert recovery["hit"].to_list() == [True, True]
+
+
+def test_regulators_v2_benchmark_has_required_groups() -> None:
+    benchmark = load_benchmark_csv(Path("configs/benchmarks/regulators_v2.csv"))
+    counts = {
+        str(row["analyte"]): int(row["len"])
+        for row in benchmark.group_by("analyte").len().iter_rows(named=True)
+    }
+
+    assert counts["CO"] >= 10
+    assert counts["CN"] >= 10
+    assert counts["negative_control"] >= 10
+    assert benchmark.filter(pl.col("verify_pmid")).height > 0
+    accessions = benchmark.filter(pl.col("uniprot_accession").str.len_chars() > 0)
+    assert accessions.height >= 28

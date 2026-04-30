@@ -1,4 +1,6 @@
-benchmark_csv: data/benchmarks/benchmark_v1.csv
+benchmark_csv: data/benchmarks/regulators_v2.csv
+regulator_benchmark_csv: data/benchmarks/regulators_v2.csv
+anchor_benchmark_csv: data/benchmarks/anchors_v1.csv
 positive_recall_threshold: 0.80
 negative_false_positive_threshold: 0.10
 report_per_family: true

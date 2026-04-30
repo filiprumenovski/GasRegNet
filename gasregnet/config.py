@@ -80,20 +80,41 @@ class RegulatorFamilyEntry(StrictModel):
 class SensoryDomainEntry(StrictModel):
     domain: str
     pfam_id: str
+    role: Literal["sensor", "transducer", "effector"] = "sensor"
     chemistry: Literal[
         "heme",
-        "iron_sulfur",
-        "cysteine_rich",
+        "iron_sulfur_4Fe4S",
+        "iron_sulfur_2Fe2S",
         "flavin",
-        "redox",
-        "metal",
+        "globin",
         "cnmp",
-        "generic_signal",
+        "cysteine_metal",
+        "redox_quinone",
+        "metal_zinc",
+        "none",
     ]
+    notes: str = ""
+
+
+class SensoryRescoreConfig(StrictModel):
+    domain: str
+    chemistry: str
+
+
+class SensoryPairedEvidenceRule(StrictModel):
+    rule_name: str
+    if_pfam_all: list[str] = Field(default_factory=list)
+    if_motif_any: list[str] = Field(default_factory=list)
+    if_co_pfam_any: list[str] = Field(default_factory=list)
+    if_organism_kingdom: str | None = None
+    rescore: SensoryRescoreConfig
+    notes: str = ""
 
 
 class BenchmarkConfig(StrictModel):
     benchmark_csv: Path
+    regulator_benchmark_csv: Path | None = None
+    anchor_benchmark_csv: Path | None = None
     positive_recall_threshold: float = Field(ge=0.0, le=1.0)
     negative_false_positive_threshold: float = Field(ge=0.0, le=1.0)
     report_per_family: bool
@@ -103,6 +124,7 @@ class GasRegNetConfig(StrictModel):
     analytes: list[AnalyteConfig]
     regulator_families: list[RegulatorFamilyEntry]
     sensory_domains: list[SensoryDomainEntry]
+    paired_evidence: list[SensoryPairedEvidenceRule] = Field(default_factory=list)
     scoring: ScoringConfig
     benchmark: BenchmarkConfig
     window: Literal["strict", "standard", "extended"] = "standard"
@@ -128,7 +150,16 @@ def _load_entries(path: Path, key: str) -> list[dict[str, Any]]:
     return entries
 
 
+def _load_optional_entries(path: Path, key: str) -> list[dict[str, Any]]:
+    data = _read_yaml(path)
+    entries = data.get(key, [])
+    if not isinstance(entries, list):
+        raise ConfigError(f"{path}: expected list field {key!r}")
+    return entries
+
+
 def _compose_from_dir(config_dir: Path) -> dict[str, Any]:
+    sensory_path = config_dir / "sensory_domains.yaml"
     return {
         "analytes": [
             _read_yaml(config_dir / "analytes" / "co.yaml"),
@@ -139,9 +170,10 @@ def _compose_from_dir(config_dir: Path) -> dict[str, Any]:
             "regulator_families",
         ),
         "sensory_domains": _load_entries(
-            config_dir / "sensory_domains.yaml",
+            sensory_path,
             "sensory_domains",
         ),
+        "paired_evidence": _load_optional_entries(sensory_path, "paired_evidence"),
         "scoring": _read_yaml(config_dir / "scoring.yaml"),
         "benchmark": _read_yaml(config_dir / "benchmarks.yaml"),
         "window": "standard",
@@ -164,6 +196,7 @@ def _compose_from_headline(path: Path) -> dict[str, Any]:
     analyte_refs = headline.get("analytes")
     if not isinstance(analyte_refs, list):
         raise ConfigError(f"{path}: expected list field 'analytes'")
+    sensory_path = _resolve_reference(base_dir, headline.get("sensory_domains"))
     return {
         "analytes": [
             _read_yaml(_resolve_reference(base_dir, analyte_ref))
@@ -174,9 +207,10 @@ def _compose_from_headline(path: Path) -> dict[str, Any]:
             "regulator_families",
         ),
         "sensory_domains": _load_entries(
-            _resolve_reference(base_dir, headline.get("sensory_domains")),
+            sensory_path,
             "sensory_domains",
         ),
+        "paired_evidence": _load_optional_entries(sensory_path, "paired_evidence"),
         "scoring": _read_yaml(_resolve_reference(base_dir, headline.get("scoring"))),
         "benchmark": _read_yaml(
             _resolve_reference(base_dir, headline.get("benchmark")),

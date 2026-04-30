@@ -213,6 +213,8 @@ BenchmarkSchema = _schema(
         ),
         "pmid": _column(pl.List(pl.Utf8)),
         "notes": _column(pl.Utf8),
+        "first_publication": _column(pl.Utf8, required=False),
+        "verify_pmid": _column(pl.Boolean, required=False),
     },
 )
 

@@ -66,7 +66,7 @@ tables, figures, captions, and a run manifest under `results/corpus/`.
 
 ```bash
 uv run gasregnet validate-config --config configs --out results/config_check
-uv run gasregnet build-benchmark --out data/benchmarks/benchmark_v1.csv
+uv run gasregnet build-benchmark --version v2 --out data/benchmarks/regulators_v2.csv
 uv run gasregnet detect-anchors --out results/corpus/intermediate/anchor_hits.parquet
 uv run gasregnet extract-neighborhoods --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus
 uv run gasregnet evaluate-benchmark --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus/tables/T1_benchmark_recovery.csv

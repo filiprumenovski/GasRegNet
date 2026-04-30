@@ -15,6 +15,10 @@ def test_load_config_from_directory() -> None:
     assert [analyte.analyte for analyte in config.analytes] == ["CO", "CN"]
     assert config.seed == 20260429
     assert config.scoring.enrichment.case_control_ratio == (1, 3)
+    assert config.sensory_domains[0].role == "sensor"
+    assert config.sensory_domains[0].chemistry == "none"
+    assert any(entry.role == "effector" for entry in config.sensory_domains)
+    assert config.paired_evidence[0].rule_name == "cooA_heme_rescore"
 
 
 def test_load_config_from_headline_file() -> None:
@@ -22,6 +26,18 @@ def test_load_config_from_headline_file() -> None:
 
     assert len(config.regulator_families) >= 10
     assert config.benchmark.positive_recall_threshold == 0.8
+
+
+def test_load_config_rejects_invalid_paired_evidence() -> None:
+    bad_config = Path("configs/sensory_domains.yaml").read_text(encoding="utf-8")
+    assert "paired_evidence" in bad_config
+
+    with pytest.raises(ConfigError, match="expected list field 'paired_evidence'"):
+        from gasregnet.config import _load_optional_entries
+
+        path = Path("/tmp/gasregnet_bad_sensory.yaml")
+        path.write_text("sensory_domains: []\npaired_evidence: bad\n", encoding="utf-8")
+        _load_optional_entries(path, "paired_evidence")
 
 
 def test_resolve_and_dump_writes_yaml(tmp_path: Path) -> None:

@@ -6,6 +6,8 @@ from pathlib import Path
 
 import polars as pl
 
+from gasregnet.schemas import BenchmarkSchema, validate
+
 BENCHMARK_RECOVERY_SCHEMA = {
     "benchmark_id": pl.Utf8,
     "analyte": pl.Utf8,
@@ -15,6 +17,70 @@ BENCHMARK_RECOVERY_SCHEMA = {
     "rank": pl.Int64,
     "candidate_score": pl.Float64,
 }
+BENCHMARK_LIST_COLUMNS = ("expected_sensory_domains", "pmid")
+
+
+def _split_list_cell(value: object) -> list[str]:
+    text = "" if value is None else str(value).strip()
+    if text in {"", "[]"}:
+        return []
+    if text.startswith("[") and text.endswith("]"):
+        text = text[1:-1].replace('"', "").replace("'", "")
+    return [item.strip() for item in text.split("|") if item.strip()]
+
+
+def load_benchmark_csv(path: Path) -> pl.DataFrame:
+    """Load a benchmark CSV and coerce list-like columns for schema validation."""
+
+    frame = pl.read_csv(path)
+    if frame.is_empty():
+        return validate(frame, BenchmarkSchema)
+    string_columns = [
+        "benchmark_id",
+        "analyte",
+        "protein_name",
+        "uniprot_accession",
+        "organism",
+        "anchor_family",
+        "expected_regulator_class",
+        "sensing_evidence_class",
+        "notes",
+        "first_publication",
+    ]
+    frame = frame.with_columns(
+        pl.col(column).fill_null("").cast(pl.Utf8)
+        for column in string_columns
+        if column in frame.columns
+    )
+    for column in BENCHMARK_LIST_COLUMNS:
+        if column in frame.columns:
+            values = [_split_list_cell(value) for value in frame[column].to_list()]
+            frame = frame.with_columns(
+                pl.Series(column, values, dtype=pl.List(pl.Utf8)),
+            )
+    if "verify_pmid" in frame.columns and frame["verify_pmid"].dtype != pl.Boolean:
+        frame = frame.with_columns(
+            pl.col("verify_pmid")
+            .cast(pl.Utf8)
+            .str.to_lowercase()
+            .is_in(["true", "1", "yes"])
+            .alias("verify_pmid"),
+        )
+    return validate(frame, BenchmarkSchema)
+
+
+def write_benchmark_csv(frame: pl.DataFrame, path: Path) -> Path:
+    """Validate and write a benchmark CSV with list columns serialized."""
+
+    validated = validate(frame, BenchmarkSchema)
+    output = validated.with_columns(
+        pl.col(column).list.join("|").alias(column)
+        for column in BENCHMARK_LIST_COLUMNS
+        if column in validated.columns
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    output.write_csv(path)
+    return path
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -73,7 +139,7 @@ def evaluate_benchmark(
 ) -> pl.DataFrame:
     """Evaluate benchmark recovery against anchor hits and ranked candidates."""
 
-    benchmark = pl.read_csv(benchmark_csv)
+    benchmark = load_benchmark_csv(benchmark_csv)
     candidate_ranks = _candidate_ranks(candidates)
     rows: list[dict[str, object]] = []
     for benchmark_row in benchmark.iter_rows(named=True):
