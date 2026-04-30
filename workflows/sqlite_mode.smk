@@ -1,7 +1,8 @@
 configfile: "configs/headline.yaml"
 
-OUT_DIR = "results/repro"
-SQLITE = "tests/fixtures/mini_efi.sqlite"
+OUT_DIR = config.get("out_dir", "results/repro")
+CONFIG_PATH = config.get("config_path", "configs/headline.yaml")
+SQLITE = config.get("sqlite", "tests/fixtures/mini_efi.sqlite")
 
 
 rule all:
@@ -38,7 +39,7 @@ rule sqlite_demo:
         partition_caption=f"{OUT_DIR}/captions/figure_4_chemistry_partition.md",
     params:
         out_dir=OUT_DIR,
-        config="configs/headline.yaml",
+        config=CONFIG_PATH,
         sqlite=SQLITE,
     shell:
         """

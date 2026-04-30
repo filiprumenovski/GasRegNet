@@ -1,16 +1,34 @@
 """Command-line interface for GasRegNet."""
 
+import subprocess
 from pathlib import Path
 
 import click
+import polars as pl
 
 from gasregnet.config import load_config, resolve_and_dump
-from gasregnet.io.parquet import write_parquet
+from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
 from gasregnet.logging import configure_logging
 from gasregnet.manifest import build_manifest, write_manifest
 from gasregnet.paths import ensure_out_dir
-from gasregnet.schemas import GenesSchema, LociSchema
+from gasregnet.reports.captions import build_result_led_captions, write_caption_files
+from gasregnet.reports.figures import (
+    figure_1_workflow_and_recovery,
+    figure_2_locus_landscape,
+    figure_3_archetype_atlas,
+    figure_4_chemistry_partition,
+    figure_5_candidate_ranking,
+    figure_6_structure_hypotheses,
+)
+from gasregnet.reports.tables import write_publication_tables
+from gasregnet.schemas import (
+    ArchetypesSchema,
+    EnrichmentResultsSchema,
+    GenesSchema,
+    LociSchema,
+    RegulatorCandidatesSchema,
+)
 from gasregnet.search.diamond import parse_diamond_output, run_diamond
 
 
@@ -50,6 +68,32 @@ def _write_metadata(
 
 def _placeholder(command: str) -> None:
     raise click.UsageError(f"{command} is not implemented in this scaffold yet.")
+
+
+def _benchmark_from_candidates(candidates_path: Path) -> Path | None:
+    candidate_table = (
+        candidates_path.parent.parent / "tables" / "T1_benchmark_recovery.csv"
+    )
+    return candidate_table if candidate_table.exists() else None
+
+
+def _fallback_benchmark(candidates_path: Path) -> Path:
+    candidates = read_parquet(candidates_path, RegulatorCandidatesSchema)
+    output = candidates_path.parent / "benchmark_recovery.csv"
+    if candidates.is_empty():
+        output.write_text(
+            "benchmark_id,analyte,protein_name,organism,hit,rank,candidate_score\n",
+            encoding="utf-8",
+        )
+        return output
+    top = candidates.sort("candidate_score", descending=True).row(0, named=True)
+    output.write_text(
+        "benchmark_id,analyte,protein_name,organism,hit,rank,candidate_score\n"
+        f"derived_top_candidate,{top['analyte']},{top['gene_accession']},"
+        f"{top['organism']},true,1,{top['candidate_score']}\n",
+        encoding="utf-8",
+    )
+    return output
 
 
 @app.command("validate-config", help="Validate a composed GasRegNet configuration.")
@@ -232,14 +276,134 @@ def archetypes_command() -> None:
 
 
 @app.command("report", help="Build publication tables, figures, and captions.")
-def report_command() -> None:
+@click.option(
+    "--results",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Run directory containing intermediate Parquet files.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Report output directory.",
+)
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def report_command(
+    results: Path,
+    out: Path,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Build publication tables, figures, and captions."""
 
-    _placeholder("report")
+    configure_logging(verbose=verbose)
+    ensure_out_dir(out)
+    intermediate = results / "intermediate"
+    loci = read_parquet(intermediate / "loci.parquet", LociSchema)
+    candidates = read_parquet(
+        intermediate / "candidates.parquet",
+        RegulatorCandidatesSchema,
+    )
+    enrichment = read_parquet(
+        intermediate / "enrichment.parquet",
+        EnrichmentResultsSchema,
+    )
+    archetypes = read_parquet(intermediate / "archetypes.parquet", ArchetypesSchema)
+    benchmark_path = _benchmark_from_candidates(intermediate / "candidates.parquet")
+    if benchmark_path is None:
+        benchmark_path = _fallback_benchmark(intermediate / "candidates.parquet")
+    benchmark_recovery = pl.read_csv(benchmark_path)
+
+    write_publication_tables(
+        benchmark_recovery=benchmark_recovery,
+        candidates=candidates,
+        enrichment=enrichment,
+        archetypes=archetypes,
+        out_dir=out / "tables",
+    )
+    figures_dir = out / "figures"
+    figure_1_workflow_and_recovery(benchmark_recovery, figures_dir)
+    figure_2_locus_landscape(loci, figures_dir)
+    figure_3_archetype_atlas(archetypes, figures_dir)
+    figure_4_chemistry_partition(enrichment, figures_dir)
+    figure_5_candidate_ranking(candidates, figures_dir)
+    figure_6_structure_hypotheses(candidates, results / "structures", figures_dir)
+    captions = build_result_led_captions(
+        benchmark_results=benchmark_recovery,
+        loci=loci,
+        archetypes=archetypes,
+        enrichment=enrichment,
+        candidates=candidates,
+        top_candidates=candidates,
+    )
+    write_caption_files(captions, out / "captions")
+    manifest = build_manifest(
+        seed=seed,
+        command="report",
+        input_paths={
+            "loci": intermediate / "loci.parquet",
+            "candidates": intermediate / "candidates.parquet",
+            "enrichment": intermediate / "enrichment.parquet",
+            "archetypes": intermediate / "archetypes.parquet",
+        },
+    )
+    write_manifest(manifest, out)
+    click.echo(f"wrote report artifacts to {out}")
 
 
 @app.command("repro", help="Run the headline reproducibility workflow.")
-def repro_command() -> None:
+@click.option(
+    "--config",
+    default=Path("configs/headline.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Headline config YAML.",
+)
+@click.option(
+    "--out",
+    default=Path("results/repro"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Workflow output directory.",
+)
+@click.option(
+    "--sqlite",
+    default=Path("tests/fixtures/mini_efi.sqlite"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="EFI-GNT SQLite input for the local workflow.",
+)
+@click.option("--cores", default=1, show_default=True, help="Snakemake cores.")
+@click.option("--seed", default=20260429, show_default=True, help="Random seed.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def repro_command(
+    config: Path,
+    out: Path,
+    sqlite: Path,
+    cores: int,
+    seed: int,
+    verbose: bool,
+) -> None:
     """Run the headline reproducibility workflow."""
 
-    _placeholder("repro")
+    del seed
+    configure_logging(verbose=verbose)
+    subprocess.run(
+        [
+            "uv",
+            "run",
+            "snakemake",
+            "-s",
+            "workflows/sqlite_mode.smk",
+            "--cores",
+            str(cores),
+            "--config",
+            f"out_dir={out}",
+            f"config_path={config}",
+            f"sqlite={sqlite}",
+        ],
+        check=True,
+    )
+    click.echo(f"repro artifacts written to {out}")
