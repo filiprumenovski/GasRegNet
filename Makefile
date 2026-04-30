@@ -1,4 +1,4 @@
-.PHONY: sync lint test assets datasets index-datasets summarize-datasets repro repro-real clean
+.PHONY: sync lint test assets datasets index-datasets summarize-datasets scan-datasets repro repro-real clean
 
 sync:
 	uv sync --extra dev
@@ -21,6 +21,12 @@ index-datasets:
 
 summarize-datasets:
 	uv run gasregnet summarize-refseq-corpus --manifest configs/refseq_catalogs.yaml
+
+scan-datasets:
+	uv run gasregnet scan-refseq-corpus \
+		--manifest configs/refseq_catalogs.yaml \
+		--scan-config configs/refseq_scan.yaml \
+		--out results/refseq_anchor_scan.csv
 
 repro:
 	uv run snakemake -s workflows/sqlite_mode.smk --cores 1

@@ -51,6 +51,8 @@ Larger local datasets are declared in `configs/datasets.yaml`, downloaded with
 `make index-datasets` converts those assets into local DuckDB reference catalogs
 under ignored `databases/`.
 `make summarize-datasets` reports catalog sizes and feature-linkage counts.
+`make scan-datasets` scans indexed catalogs for configured gas-anchor terms and
+writes `results/refseq_anchor_scan.csv`.
 
 ## CLI
 

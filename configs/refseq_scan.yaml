@@ -1,0 +1,12 @@
+targets:
+  - analyte: CO
+    terms:
+      - coxL
+      - cooS
+      - carbon monoxide dehydrogenase
+  - analyte: CN
+    terms:
+      - cydA
+      - cydB
+      - cydX
+      - cytochrome bd

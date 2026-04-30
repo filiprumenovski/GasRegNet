@@ -10,6 +10,7 @@ from gasregnet.datasets.refseq import (
     index_refseq_dataset,
     query_refseq_catalog,
     query_refseq_corpus,
+    scan_refseq_corpus,
     summarize_refseq_corpus,
 )
 
@@ -88,9 +89,22 @@ catalogs:
     outputs = index_refseq_corpus(manifest, root=tmp_path)
     summary = summarize_refseq_corpus(manifest, root=tmp_path)
     results = query_refseq_corpus(manifest, "cydA", root=tmp_path)
+    scan_config = tmp_path / "scan.yaml"
+    scan_config.write_text(
+        """
+targets:
+  - analyte: CN
+    terms:
+      - cydA
+""",
+        encoding="utf-8",
+    )
+    scan = scan_refseq_corpus(manifest, scan_config, root=tmp_path)
 
     assert outputs == [tmp_path / "mini.duckdb"]
     assert summary["n_proteins"].item() == 1
     assert summary["n_features_with_protein"].item() == 1
     assert results["dataset_name"].item() == "mini"
     assert results["protein_accession"].item() == "NP_000002.1"
+    assert scan["analyte"].item() == "CN"
+    assert scan["gene"].item() == "cydA"

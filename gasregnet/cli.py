@@ -16,6 +16,7 @@ from gasregnet.datasets.refseq import (
     index_refseq_dataset,
     query_refseq_catalog,
     query_refseq_corpus,
+    scan_refseq_corpus,
     summarize_refseq_corpus,
 )
 from gasregnet.io.parquet import read_parquet, write_parquet
@@ -318,6 +319,53 @@ def summarize_refseq_corpus_command(
     configure_logging(verbose=verbose)
     frame = summarize_refseq_corpus(manifest, root=root)
     click.echo(frame.write_csv())
+
+
+@app.command("scan-refseq-corpus", help="Scan RefSeq catalogs for gas anchor terms.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--scan-config",
+    default=Path("configs/refseq_scan.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Analyte scan target YAML.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path),
+    help="Optional CSV output path. Writes to stdout when omitted.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def scan_refseq_corpus_command(
+    manifest: Path,
+    scan_config: Path,
+    root: Path,
+    out: Path | None,
+    verbose: bool,
+) -> None:
+    """Scan all RefSeq catalogs for configured analyte anchor terms."""
+
+    configure_logging(verbose=verbose)
+    frame = scan_refseq_corpus(manifest, scan_config, root=root)
+    if out is None:
+        click.echo(frame.write_csv())
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    frame.write_csv(out)
+    click.echo(out)
 
 
 @app.command("validate-config", help="Validate a composed GasRegNet configuration.")

@@ -44,6 +44,24 @@ CATALOG_SCHEMA = {
     "gff": pl.Utf8,
     "out_db": pl.Utf8,
 }
+SCAN_TARGET_SCHEMA = {
+    "analyte": pl.Utf8,
+    "term": pl.Utf8,
+}
+SCAN_RESULT_SCHEMA = {
+    "dataset_name": pl.Utf8,
+    "analyte": pl.Utf8,
+    "term": pl.Utf8,
+    "protein_accession": pl.Utf8,
+    "length_aa": pl.Int64,
+    "locus_tag": pl.Utf8,
+    "gene": pl.Utf8,
+    "product": pl.Utf8,
+    "seqid": pl.Utf8,
+    "start_nt": pl.Int64,
+    "end_nt": pl.Int64,
+    "strand": pl.Utf8,
+}
 
 
 def _feature_value(attributes: dict[str, str], *keys: str) -> str | None:
@@ -194,6 +212,28 @@ def read_refseq_catalog_manifest(manifest: Path, *, root: Path) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=CATALOG_SCHEMA)
 
 
+def read_refseq_scan_config(path: Path) -> pl.DataFrame:
+    """Read analyte search terms for RefSeq catalog scans."""
+
+    payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("targets"), list):
+        raise ValueError(f"scan config must contain a targets list: {path}")
+    rows: list[dict[str, str]] = []
+    for raw in payload["targets"]:
+        if not isinstance(raw, dict):
+            raise ValueError("scan target entries must be mappings")
+        analyte = raw.get("analyte")
+        terms = raw.get("terms")
+        if not isinstance(analyte, str) or not analyte:
+            raise ValueError("scan target is missing string field: analyte")
+        if not isinstance(terms, list) or not all(
+            isinstance(term, str) for term in terms
+        ):
+            raise ValueError(f"scan target {analyte} is missing string list: terms")
+        rows.extend({"analyte": analyte, "term": term} for term in terms)
+    return pl.DataFrame(rows, schema=SCAN_TARGET_SCHEMA)
+
+
 def index_refseq_corpus(manifest: Path, *, root: Path) -> list[Path]:
     """Index every RefSeq catalog declared in a corpus manifest."""
 
@@ -342,4 +382,91 @@ def query_refseq_corpus(
                 "dataset_name": pl.Utf8,
             },
         )
+    return pl.concat(frames, how="vertical")
+
+
+def _empty_scan_results() -> pl.DataFrame:
+    return pl.DataFrame(schema=SCAN_RESULT_SCHEMA)
+
+
+def scan_refseq_catalog(
+    db: Path,
+    *,
+    dataset_name: str,
+    targets: pl.DataFrame,
+) -> pl.DataFrame:
+    """Scan a RefSeq catalog for configured analyte anchor terms."""
+
+    frames: list[pl.DataFrame] = []
+    with duckdb.connect(str(db), read_only=True) as connection:
+        for row in targets.iter_rows(named=True):
+            term = str(row["term"])
+            pattern = f"%{term}%"
+            frame = connection.execute(
+                """
+                select distinct
+                    ? as dataset_name,
+                    ? as analyte,
+                    ? as term,
+                    coalesce(features.protein_accession, '') as protein_accession,
+                    coalesce(proteins.length_aa, 0) as length_aa,
+                    coalesce(features.locus_tag, '') as locus_tag,
+                    coalesce(features.gene, '') as gene,
+                    coalesce(features.product, '') as product,
+                    coalesce(features.seqid, '') as seqid,
+                    features.start_nt,
+                    features.end_nt,
+                    coalesce(features.strand, '') as strand
+                from features
+                left join proteins using (protein_accession)
+                where
+                    features.protein_accession is not null
+                    and (
+                        features.gene ilike ?
+                        or features.locus_tag ilike ?
+                        or features.product ilike ?
+                        or features.protein_accession ilike ?
+                    )
+                order by protein_accession, start_nt nulls last
+                """,
+                [
+                    dataset_name,
+                    row["analyte"],
+                    term,
+                    pattern,
+                    pattern,
+                    pattern,
+                    pattern,
+                ],
+            ).pl()
+            if not frame.is_empty():
+                frames.append(frame)
+    if not frames:
+        return _empty_scan_results()
+    return pl.concat(frames, how="vertical").unique(
+        subset=["dataset_name", "analyte", "protein_accession", "locus_tag", "term"],
+    )
+
+
+def scan_refseq_corpus(
+    manifest: Path,
+    scan_config: Path,
+    *,
+    root: Path,
+) -> pl.DataFrame:
+    """Scan every RefSeq catalog for configured analyte anchor terms."""
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
+    targets = read_refseq_scan_config(scan_config)
+    frames: list[pl.DataFrame] = []
+    for row in catalogs.iter_rows(named=True):
+        frame = scan_refseq_catalog(
+            Path(str(row["out_db"])),
+            dataset_name=str(row["dataset_name"]),
+            targets=targets,
+        )
+        if not frame.is_empty():
+            frames.append(frame)
+    if not frames:
+        return _empty_scan_results()
     return pl.concat(frames, how="vertical")

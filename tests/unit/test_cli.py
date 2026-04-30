@@ -24,6 +24,7 @@ def test_help_lists_core_subcommands() -> None:
         "query-refseq",
         "query-refseq-corpus",
         "summarize-refseq-corpus",
+        "scan-refseq-corpus",
         "build-benchmark",
         "run-sqlite",
         "diamond-search",
