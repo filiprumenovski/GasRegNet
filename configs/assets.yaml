@@ -1,0 +1,16 @@
+assets:
+  - name: co_anchor_seeds
+    output: data/seeds/co_anchor_seeds.faa
+    sha256: 3c736a3776809f5c6fc5b4753f3ce3fdadcc61e2efa8003be27b00cb89fa0f71
+    urls:
+      - https://rest.uniprot.org/uniprotkb/P19919.fasta
+      - https://rest.uniprot.org/uniprotkb/P31896.fasta
+    notes: Reviewed carbon monoxide dehydrogenase anchors coxL and cooS.
+  - name: cn_anchor_seeds
+    output: data/seeds/cn_anchor_seeds.faa
+    sha256: cfef0203b21ba131252ee5a676c793a1e7c6624d99e69c31b088d4688aac377c
+    urls:
+      - https://rest.uniprot.org/uniprotkb/P0ABJ9.fasta
+      - https://rest.uniprot.org/uniprotkb/P0ABK2.fasta
+      - https://rest.uniprot.org/uniprotkb/P56100.fasta
+    notes: Reviewed Escherichia coli K-12 cytochrome bd-I cydA, cydB, and cydX anchors.

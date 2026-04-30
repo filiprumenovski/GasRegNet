@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from pathlib import Path
+
+import duckdb
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
 MINI_EFI = FIXTURES_DIR / "mini_efi.sqlite"
@@ -21,10 +22,14 @@ def build_mini_efi(path: Path = MINI_EFI) -> Path:
     if path.exists():
         path.unlink()
 
-    with sqlite3.connect(path) as connection:
-        connection.executescript(
+    with duckdb.connect() as connection:
+        quoted_path = str(path).replace("'", "''")
+        connection.execute("INSTALL sqlite")
+        connection.execute("LOAD sqlite")
+        connection.execute(f"ATTACH '{quoted_path}' AS fixture (TYPE SQLITE)")
+        connection.execute(
             """
-            create table neighborhoods (
+            create table fixture.neighborhoods (
                 locus_key text primary key,
                 cluster_id integer not null,
                 anchor_accession text not null,
@@ -37,8 +42,12 @@ def build_mini_efi(path: Path = MINI_EFI) -> Path:
                 marker_genes_present_json text not null,
                 accessory_genes_present_json text not null
             );
+            """,
+        )
+        connection.execute(
+            """
 
-            create table genes (
+            create table fixture.genes (
                 locus_key text not null,
                 gene_accession text not null,
                 gene_order integer not null,
@@ -54,14 +63,13 @@ def build_mini_efi(path: Path = MINI_EFI) -> Path:
                 regulator_class text not null,
                 sensory_domains_json text not null,
                 is_regulator_candidate integer not null,
-                primary key (locus_key, gene_accession),
-                foreign key (locus_key) references neighborhoods(locus_key)
+                primary key (locus_key, gene_accession)
             );
             """,
         )
         connection.execute(
             """
-            insert into neighborhoods values
+            insert into fixture.neighborhoods values
             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -80,7 +88,7 @@ def build_mini_efi(path: Path = MINI_EFI) -> Path:
         )
         connection.executemany(
             """
-            insert into genes values
+            insert into fixture.genes values
             (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [

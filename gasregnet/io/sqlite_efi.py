@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import polars as pl
 
 from gasregnet.errors import MissingInputError, SchemaError
@@ -83,24 +83,47 @@ GENES_SCHEMA: dict[str, Any] = {
 }
 
 
-def _connect(path: Path) -> sqlite3.Connection:
+def _connect(path: Path) -> duckdb.DuckDBPyConnection:
     if not path.exists():
         raise MissingInputError(f"SQLite file does not exist: {path}")
-    return sqlite3.connect(path)
+    connection = duckdb.connect()
+    quoted_path = str(path).replace("'", "''")
+    try:
+        connection.execute("INSTALL sqlite")
+        connection.execute("LOAD sqlite")
+        connection.execute(f"ATTACH '{quoted_path}' AS efi (TYPE SQLITE)")
+    except duckdb.Error as exc:
+        connection.close()
+        raise SchemaError(
+            "SQLite file is missing required table(s): genes, neighborhoods",
+        ) from exc
+    return connection
 
 
-def _table_names(connection: sqlite3.Connection) -> set[str]:
+def _table_names(connection: duckdb.DuckDBPyConnection) -> set[str]:
     rows = connection.execute(
-        "select name from sqlite_master where type = 'table'",
+        """
+        select distinct table_name
+        from information_schema.columns
+        where table_catalog = 'efi'
+        """,
     ).fetchall()
     return {str(row[0]) for row in rows}
 
 
-def _columns(connection: sqlite3.Connection, table: str) -> set[str]:
-    return {str(row[1]) for row in connection.execute(f"pragma table_info({table})")}
+def _columns(connection: duckdb.DuckDBPyConnection, table: str) -> set[str]:
+    rows = connection.execute(
+        """
+        select column_name
+        from information_schema.columns
+        where table_catalog = 'efi' and table_name = ?
+        """,
+        [table],
+    ).fetchall()
+    return {str(row[0]) for row in rows}
 
 
-def _check_sqlite_shape(connection: sqlite3.Connection) -> None:
+def _check_sqlite_shape(connection: duckdb.DuckDBPyConnection) -> None:
     tables = _table_names(connection)
     missing_tables = REQUIRED_TABLES - tables
     if missing_tables:
@@ -135,13 +158,16 @@ def _json_list(value: object) -> list[str]:
 
 
 def _fetch_dicts(
-    connection: sqlite3.Connection,
+    connection: duckdb.DuckDBPyConnection,
     query: str,
     parameters: tuple[Any, ...] = (),
 ) -> list[dict[str, Any]]:
-    connection.row_factory = sqlite3.Row
-    rows = connection.execute(query, parameters).fetchall()
-    return [dict(row) for row in rows]
+    result = connection.execute(query, parameters)
+    if result.description is None:
+        return []
+    columns = [column[0] for column in result.description]
+    rows = result.fetchall()
+    return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
 def _cluster_clause(cluster_filter: list[int] | None) -> tuple[str, tuple[Any, ...]]:
@@ -273,15 +299,15 @@ def read_efi_sqlite(
         clause, parameters = _cluster_clause(cluster_filter)
         neighborhoods = _fetch_dicts(
             connection,
-            f"select * from neighborhoods{clause} order by cluster_id, locus_key",
+            f"select * from efi.neighborhoods{clause} order by cluster_id, locus_key",
             parameters,
         )
         genes = _fetch_dicts(
             connection,
             """
             select genes.*
-            from genes
-            join neighborhoods using (locus_key)
+            from efi.genes
+            join efi.neighborhoods using (locus_key)
             """
             f"{clause}"
             " order by genes.locus_key, genes.gene_order",
