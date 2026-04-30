@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, cast
 
 import polars as pl
@@ -94,6 +95,10 @@ def _rows_for_feature_type(
             [[case_with, case_without], [control_with, control_without]],
             alternative="two-sided",
         )
+        if math.isnan(odds_ratio):
+            odds_ratio = 0.0
+        if math.isnan(p_value):
+            p_value = 1.0
         rows.append(
             {
                 "analyte": analyte,
