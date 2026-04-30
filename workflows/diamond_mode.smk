@@ -1,10 +1,23 @@
+OUT_DIR = config.get("out_dir", "results/diamond")
+QUERY = config.get("query", "data/seeds/co_anchor_seeds.faa")
+DB = config.get("db", "databases/bacteria.dmnd")
+
+
 rule all:
     input:
-        "results/diamond/README.txt"
+        f"{OUT_DIR}/hits.parquet",
 
 
-rule scaffold_marker:
+rule diamond_search:
+    input:
+        query=QUERY,
+        db=DB,
     output:
-        "results/diamond/README.txt"
+        hits=f"{OUT_DIR}/hits.parquet",
     shell:
-        "mkdir -p results/diamond && printf 'GasRegNet DIAMOND workflow placeholder\\n' > {output}"
+        """
+        uv run gasregnet diamond-search \
+          --query {input.query} \
+          --db {input.db} \
+          --out {output.hits}
+        """
