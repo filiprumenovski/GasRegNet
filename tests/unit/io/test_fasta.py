@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 import pytest
@@ -31,3 +32,11 @@ def test_read_fasta_rejects_empty_file(tmp_path: Path) -> None:
 
     with pytest.raises(SchemaError, match="no records"):
         list(read_fasta(path))
+
+
+def test_read_fasta_accepts_gzip(tmp_path: Path) -> None:
+    path = tmp_path / "seqs.faa.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write(">seq1 compressed\nMAGA\n")
+
+    assert list(read_fasta(path)) == [("seq1", "seq1 compressed", "MAGA")]

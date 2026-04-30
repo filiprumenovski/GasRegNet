@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
 
 import pytest
@@ -36,3 +37,17 @@ def test_read_gff3_rejects_gff2(tmp_path: Path) -> None:
 
     with pytest.raises(SchemaError, match="GFF3"):
         read_gff3(path)
+
+
+def test_read_gff3_accepts_gzip(tmp_path: Path) -> None:
+    path = tmp_path / "genes.gff3.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write(
+            "##gff-version 3\n"
+            "contig\tRefSeq\tCDS\t1\t99\t.\t+\t0\tID=cds1;Name=coxL\n",
+        )
+
+    frame = read_gff3(path)
+
+    assert frame.height == 1
+    assert frame["feature_type"].item() == "CDS"

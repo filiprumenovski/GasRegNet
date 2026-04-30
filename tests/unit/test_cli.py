@@ -19,6 +19,8 @@ def test_help_lists_core_subcommands() -> None:
     for command in (
         "validate-config",
         "fetch-assets",
+        "index-refseq",
+        "query-refseq",
         "build-benchmark",
         "run-sqlite",
         "diamond-search",

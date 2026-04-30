@@ -1,4 +1,4 @@
-.PHONY: sync lint test assets datasets repro repro-real clean
+.PHONY: sync lint test assets datasets index-datasets repro repro-real clean
 
 sync:
 	uv sync --extra dev
@@ -15,6 +15,13 @@ assets:
 
 datasets:
 	uv run gasregnet fetch-assets --manifest configs/datasets.yaml --downloader aria2 --force
+
+index-datasets:
+	uv run gasregnet index-refseq \
+		--protein-faa data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_protein.faa.gz \
+		--gff data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_genomic.gff.gz \
+		--out-db databases/ecoli_k12_mg1655.duckdb \
+		--dataset-name ecoli_k12_mg1655
 
 repro:
 	uv run snakemake -s workflows/sqlite_mode.smk --cores 1

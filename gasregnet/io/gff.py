@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import gzip
 from pathlib import Path
+from typing import TextIO
 from urllib.parse import unquote
 
 import polars as pl
@@ -20,6 +22,12 @@ GFF_COLUMNS = [
     "phase",
     "attributes",
 ]
+
+
+def _open_text(path: Path) -> TextIO:
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt", encoding="utf-8")
+    return path.open("r", encoding="utf-8")
 
 
 def parse_attributes(raw_attributes: str) -> dict[str, str]:
@@ -46,7 +54,7 @@ def read_gff3(path: Path) -> pl.DataFrame:
 
     rows: list[dict[str, object]] = []
     saw_version = False
-    with path.open("r", encoding="utf-8") as handle:
+    with _open_text(path) as handle:
         for line_number, raw_line in enumerate(handle, start=1):
             line = raw_line.rstrip("\n")
             if line_number == 1 and line != "##gff-version 3":

@@ -11,6 +11,7 @@ from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.assets import Downloader, fetch_assets
 from gasregnet.config import load_config, resolve_and_dump
+from gasregnet.datasets.refseq import index_refseq_dataset, query_refseq_catalog
 from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
 from gasregnet.logging import configure_logging
@@ -146,6 +147,73 @@ def fetch_assets_command(
     )
     for path in written:
         click.echo(path)
+
+
+@app.command("index-refseq", help="Index RefSeq FASTA/GFF assets into DuckDB.")
+@click.option(
+    "--protein-faa",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Protein FASTA, optionally gzip-compressed.",
+)
+@click.option(
+    "--gff",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="GFF3 annotation, optionally gzip-compressed.",
+)
+@click.option(
+    "--out-db",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="DuckDB database to create.",
+)
+@click.option(
+    "--dataset-name",
+    required=True,
+    help="Stable dataset name stored in metadata.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def index_refseq_command(
+    protein_faa: Path,
+    gff: Path,
+    out_db: Path,
+    dataset_name: str,
+    verbose: bool,
+) -> None:
+    """Index RefSeq protein and annotation assets into DuckDB."""
+
+    configure_logging(verbose=verbose)
+    output = index_refseq_dataset(
+        protein_faa=protein_faa,
+        gff=gff,
+        out_db=out_db,
+        dataset_name=dataset_name,
+    )
+    click.echo(output)
+
+
+@app.command("query-refseq", help="Search a DuckDB RefSeq reference catalog.")
+@click.option(
+    "--db",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="DuckDB reference catalog.",
+)
+@click.option("--query", "query_text", required=True, help="Search text.")
+@click.option("--limit", default=20, show_default=True, help="Maximum result rows.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def query_refseq_command(
+    db: Path,
+    query_text: str,
+    limit: int,
+    verbose: bool,
+) -> None:
+    """Search a DuckDB RefSeq reference catalog."""
+
+    configure_logging(verbose=verbose)
+    frame = query_refseq_catalog(db, query_text, limit=limit)
+    click.echo(frame.write_csv())
 
 
 @app.command("validate-config", help="Validate a composed GasRegNet configuration.")
