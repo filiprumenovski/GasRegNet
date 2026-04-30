@@ -10,8 +10,11 @@ from gasregnet.annotation.domains import annotate_domains
 from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.archetypes.cluster import cluster_archetypes
 from gasregnet.assets import Downloader, fetch_assets
+from gasregnet.benchmark import evaluate_benchmark
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.datasets.refseq import (
+    detect_refseq_anchor_hits,
+    extract_refseq_neighborhoods,
     index_refseq_corpus,
     index_refseq_dataset,
     query_refseq_catalog,
@@ -35,6 +38,7 @@ from gasregnet.reports.figures import (
 )
 from gasregnet.reports.tables import write_publication_tables
 from gasregnet.schemas import (
+    AnchorHitsSchema,
     ArchetypesSchema,
     EnrichmentResultsSchema,
     GenesSchema,
@@ -365,6 +369,173 @@ def scan_refseq_corpus_command(
         return
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.write_csv(out)
+    click.echo(out)
+
+
+@app.command("detect-anchors", help="Detect corpus anchor hits.")
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--scan-config",
+    default=Path("configs/refseq_scan.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Analyte scan target YAML for smoke mode.",
+)
+@click.option(
+    "--mode",
+    default="smoke",
+    show_default=True,
+    type=click.Choice(["smoke", "diamond", "hmmer"]),
+    help="Anchor detection mode.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet output path.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def detect_anchors_command(
+    manifest: Path,
+    scan_config: Path,
+    mode: str,
+    root: Path,
+    out: Path,
+    verbose: bool,
+) -> None:
+    """Detect anchors and write normalized anchor-hit Parquet."""
+
+    configure_logging(verbose=verbose)
+    try:
+        anchor_hits = detect_refseq_anchor_hits(
+            manifest,
+            scan_config,
+            root=root,
+            mode=mode,
+        )
+    except NotImplementedError as exc:
+        raise click.ClickException(str(exc)) from exc
+    write_parquet(anchor_hits, out, AnchorHitsSchema)
+    click.echo(out)
+
+
+@app.command("extract-neighborhoods", help="Extract RefSeq neighborhoods.")
+@click.option(
+    "--anchor-hits",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet from detect-anchors.",
+)
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory for loci.parquet and genes.parquet.",
+)
+@click.option(
+    "--window-genes",
+    default=10,
+    show_default=True,
+    help="Number of CDS features to include on each side of an anchor.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def extract_neighborhoods_command(
+    anchor_hits: Path,
+    manifest: Path,
+    root: Path,
+    out: Path,
+    window_genes: int,
+    verbose: bool,
+) -> None:
+    """Extract canonical loci and genes from RefSeq catalogs."""
+
+    configure_logging(verbose=verbose)
+    hits = read_parquet(anchor_hits, AnchorHitsSchema)
+    loci, genes = extract_refseq_neighborhoods(
+        hits,
+        manifest,
+        root=root,
+        window_genes=window_genes,
+    )
+    write_parquet(loci, out / "intermediate" / "loci.parquet", LociSchema)
+    write_parquet(genes, out / "intermediate" / "genes.parquet", GenesSchema)
+    click.echo(out)
+
+
+@app.command("evaluate-benchmark", help="Evaluate benchmark recovery.")
+@click.option(
+    "--benchmark",
+    default=Path("data/benchmarks/benchmark_v1.csv"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Benchmark CSV.",
+)
+@click.option(
+    "--anchor-hits",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet.",
+)
+@click.option(
+    "--candidates",
+    type=click.Path(path_type=Path),
+    help="Optional scored candidates Parquet.",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path),
+    help="Optional recovery CSV output. Writes to stdout when omitted.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def evaluate_benchmark_command(
+    benchmark: Path,
+    anchor_hits: Path,
+    candidates: Path | None,
+    out: Path | None,
+    verbose: bool,
+) -> None:
+    """Evaluate benchmark recovery from anchors and optional candidates."""
+
+    configure_logging(verbose=verbose)
+    hits = read_parquet(anchor_hits, AnchorHitsSchema)
+    candidate_frame = (
+        read_parquet(candidates, RegulatorCandidatesSchema)
+        if candidates is not None
+        else None
+    )
+    recovery = evaluate_benchmark(benchmark, hits, candidate_frame)
+    if out is None:
+        click.echo(recovery.write_csv())
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    recovery.write_csv(out)
     click.echo(out)
 
 
@@ -941,3 +1112,65 @@ def repro_command(
         check=True,
     )
     click.echo(f"repro artifacts written to {out}")
+
+
+@app.command("corpus-discovery", help="Run the RefSeq corpus discovery workflow.")
+@click.option(
+    "--corpus-config",
+    default=Path("configs/corpus_discovery.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Corpus discovery config YAML.",
+)
+@click.option(
+    "--config",
+    default=Path("configs/headline.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Headline config YAML.",
+)
+@click.option(
+    "--out",
+    default=Path("results/corpus"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Workflow output directory.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option("--cores", default=1, show_default=True, help="Snakemake cores.")
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def corpus_discovery_command(
+    corpus_config: Path,
+    config: Path,
+    out: Path,
+    root: Path,
+    cores: int,
+    verbose: bool,
+) -> None:
+    """Run the RefSeq corpus discovery workflow."""
+
+    configure_logging(verbose=verbose)
+    subprocess.run(
+        [
+            "uv",
+            "run",
+            "snakemake",
+            "-s",
+            "workflows/corpus_discovery.smk",
+            "--cores",
+            str(cores),
+            "--config",
+            f"out_dir={out}",
+            f"corpus_config={corpus_config}",
+            f"config_path={config}",
+            f"root={root}",
+        ],
+        check=True,
+    )
+    click.echo(f"corpus discovery artifacts written to {out}")

@@ -25,6 +25,9 @@ def test_help_lists_core_subcommands() -> None:
         "query-refseq-corpus",
         "summarize-refseq-corpus",
         "scan-refseq-corpus",
+        "detect-anchors",
+        "extract-neighborhoods",
+        "evaluate-benchmark",
         "build-benchmark",
         "run-sqlite",
         "diamond-search",
@@ -34,6 +37,7 @@ def test_help_lists_core_subcommands() -> None:
         "archetypes",
         "report",
         "repro",
+        "corpus-discovery",
     ):
         assert command in result.output
 
@@ -231,6 +235,42 @@ def test_repro_command_invokes_snakemake(
         "workflows/sqlite_mode.smk",
     ]
     assert f"out_dir={tmp_path / 'headline'}" in calls[0]
+
+
+def test_corpus_discovery_command_invokes_snakemake(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **_: Any) -> None:
+        calls.append(command)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "corpus-discovery",
+            "--corpus-config",
+            "configs/corpus_discovery.yaml",
+            "--config",
+            "configs/headline.yaml",
+            "--out",
+            str(tmp_path / "corpus"),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls
+    assert calls[0][:5] == [
+        "uv",
+        "run",
+        "snakemake",
+        "-s",
+        "workflows/corpus_discovery.smk",
+    ]
+    assert f"out_dir={tmp_path / 'corpus'}" in calls[0]
 
 
 def test_annotate_command_accepts_optional_annotation_tables(tmp_path: Path) -> None:

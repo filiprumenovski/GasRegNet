@@ -1,11 +1,11 @@
-.PHONY: sync lint test assets datasets index-datasets summarize-datasets scan-datasets repro repro-real clean
+.PHONY: sync lint test assets datasets index-datasets summarize-datasets scan-datasets repro repro-real corpus-repro clean
 
 sync:
 	uv sync --extra dev
 
 lint:
 	uv run ruff check gasregnet scripts tests
-	uv run mypy --strict gasregnet scripts/fetch_assets.py scripts/build_test_fixtures.py
+	uv run mypy --strict gasregnet scripts/fetch_assets.py scripts/build_test_fixtures.py scripts/run_corpus_discovery.py
 
 test:
 	uv run pytest -q --cov=gasregnet
@@ -33,6 +33,9 @@ repro:
 
 repro-real:
 	uv run snakemake -s workflows/full_discovery.smk --cores 1
+
+corpus-repro: datasets index-datasets
+	uv run snakemake -s workflows/corpus_discovery.smk --cores 1
 
 clean:
 	rm -rf results/* cache .snakemake .pytest_cache .ruff_cache .mypy_cache

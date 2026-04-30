@@ -1,0 +1,4 @@
+mode: smoke
+catalogs: configs/refseq_catalogs.yaml
+scan_config: configs/refseq_scan.yaml
+output: results/corpus/intermediate/anchor_hits.parquet

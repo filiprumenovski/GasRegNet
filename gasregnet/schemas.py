@@ -23,6 +23,7 @@ REGULATOR_CLASSES = [
     "antiterminator",
     "none",
 ]
+ANCHOR_EVIDENCE_TYPES = ["term_scan", "diamond", "hmmer"]
 
 
 def _column(dtype: Any, **kwargs: Any) -> pa.Column:
@@ -31,6 +32,27 @@ def _column(dtype: Any, **kwargs: Any) -> pa.Column:
 
 def _schema(columns: dict[str, pa.Column]) -> pa.DataFrameSchema:
     return pa.DataFrameSchema(columns, strict=True, coerce=False)
+
+
+AnchorHitsSchema = _schema(
+    {
+        "dataset_name": _column(pl.Utf8),
+        "analyte": _column(pl.Utf8, checks=pa.Check.isin(ANALYTES)),
+        "anchor_family": _column(pl.Utf8),
+        "protein_accession": _column(pl.Utf8),
+        "locus_tag": _column(pl.Utf8),
+        "gene": _column(pl.Utf8),
+        "product": _column(pl.Utf8),
+        "bitscore": _column(pl.Float64, nullable=True),
+        "e_value": _column(pl.Float64, nullable=True),
+        "identity": _column(pl.Float64, nullable=True),
+        "coverage": _column(pl.Float64, nullable=True),
+        "evidence_type": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(ANCHOR_EVIDENCE_TYPES),
+        ),
+    },
+)
 
 
 LociSchema = _schema(

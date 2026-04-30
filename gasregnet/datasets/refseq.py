@@ -12,6 +12,7 @@ import yaml  # type: ignore[import-untyped]
 
 from gasregnet.io.fasta import read_fasta
 from gasregnet.io.gff import read_gff3
+from gasregnet.schemas import AnchorHitsSchema, GenesSchema, LociSchema, validate
 
 PROTEIN_SCHEMA = {
     "protein_accession": pl.Utf8,
@@ -61,6 +62,57 @@ SCAN_RESULT_SCHEMA = {
     "start_nt": pl.Int64,
     "end_nt": pl.Int64,
     "strand": pl.Utf8,
+}
+ANCHOR_HITS_SCHEMA = {
+    "dataset_name": pl.Utf8,
+    "analyte": pl.Utf8,
+    "anchor_family": pl.Utf8,
+    "protein_accession": pl.Utf8,
+    "locus_tag": pl.Utf8,
+    "gene": pl.Utf8,
+    "product": pl.Utf8,
+    "bitscore": pl.Float64,
+    "e_value": pl.Float64,
+    "identity": pl.Float64,
+    "coverage": pl.Float64,
+    "evidence_type": pl.Utf8,
+}
+LOCI_OUTPUT_SCHEMA: dict[str, Any] = {
+    "locus_id": pl.Utf8,
+    "analyte": pl.Utf8,
+    "anchor_accession": pl.Utf8,
+    "anchor_family": pl.Utf8,
+    "organism": pl.Utf8,
+    "taxon_id": pl.Int64,
+    "cluster_id": pl.Int32,
+    "contig_id": pl.Utf8,
+    "window_size": pl.Int32,
+    "is_boundary_truncated": pl.Boolean,
+    "marker_genes_present": pl.List(pl.Utf8),
+    "accessory_genes_present": pl.List(pl.Utf8),
+    "locus_score": pl.Float64,
+    "locus_confidence": pl.Utf8,
+    "taxonomic_context_score": pl.Float64,
+    "operon_integrity_score": pl.Float64,
+    "created_at": pl.Datetime("us"),
+}
+GENES_OUTPUT_SCHEMA: dict[str, Any] = {
+    "locus_id": pl.Utf8,
+    "gene_accession": pl.Utf8,
+    "relative_index": pl.Int32,
+    "relative_start": pl.Int64,
+    "relative_stop": pl.Int64,
+    "strand": pl.Utf8,
+    "product_description": pl.Utf8,
+    "pfam_ids": pl.List(pl.Utf8),
+    "pfam_descriptions": pl.List(pl.Utf8),
+    "interpro_ids": pl.List(pl.Utf8),
+    "interpro_descriptions": pl.List(pl.Utf8),
+    "functional_class": pl.Utf8,
+    "regulator_class": pl.Utf8,
+    "sensory_domains": pl.List(pl.Utf8),
+    "is_anchor": pl.Boolean,
+    "is_regulator_candidate": pl.Boolean,
 }
 
 
@@ -470,3 +522,299 @@ def scan_refseq_corpus(
     if not frames:
         return _empty_scan_results()
     return pl.concat(frames, how="vertical")
+
+
+def _empty_anchor_hits() -> pl.DataFrame:
+    return validate(pl.DataFrame(schema=ANCHOR_HITS_SCHEMA), AnchorHitsSchema)
+
+
+def normalize_scan_anchor_hits(scan_results: pl.DataFrame) -> pl.DataFrame:
+    """Normalize term-scan RefSeq hits into the public anchor-hit schema."""
+
+    if scan_results.is_empty():
+        return _empty_anchor_hits()
+    anchor_hits = scan_results.select(
+        [
+            "dataset_name",
+            "analyte",
+            pl.col("term").alias("anchor_family"),
+            "protein_accession",
+            "locus_tag",
+            "gene",
+            "product",
+            pl.lit(None, dtype=pl.Float64).alias("bitscore"),
+            pl.lit(None, dtype=pl.Float64).alias("e_value"),
+            pl.lit(None, dtype=pl.Float64).alias("identity"),
+            pl.lit(None, dtype=pl.Float64).alias("coverage"),
+            pl.lit("term_scan").alias("evidence_type"),
+        ],
+    ).unique(
+        subset=[
+            "dataset_name",
+            "analyte",
+            "anchor_family",
+            "protein_accession",
+            "locus_tag",
+        ],
+    )
+    return validate(anchor_hits, AnchorHitsSchema)
+
+
+def detect_refseq_anchor_hits(
+    manifest: Path,
+    scan_config: Path,
+    *,
+    root: Path,
+    mode: str = "smoke",
+) -> pl.DataFrame:
+    """Detect RefSeq anchors, using term scanning as the implemented smoke mode."""
+
+    if mode != "smoke":
+        msg = (
+            f"anchor detection mode {mode!r} is not implemented yet; "
+            "use mode='smoke' for term-scan anchor discovery"
+        )
+        raise NotImplementedError(msg)
+    return normalize_scan_anchor_hits(
+        scan_refseq_corpus(manifest, scan_config, root=root),
+    )
+
+
+def _catalog_paths(catalogs: pl.DataFrame) -> dict[str, Path]:
+    return {
+        str(row["dataset_name"]): Path(str(row["out_db"]))
+        for row in catalogs.iter_rows(named=True)
+    }
+
+
+def _read_cds_features(db: Path, seqid: str) -> pl.DataFrame:
+    with duckdb.connect(str(db), read_only=True) as connection:
+        return connection.execute(
+            """
+            select
+                seqid,
+                source,
+                feature_type,
+                start_nt,
+                end_nt,
+                strand,
+                phase,
+                coalesce(feature_id, '') as feature_id,
+                coalesce(parent_id, '') as parent_id,
+                coalesce(locus_tag, '') as locus_tag,
+                coalesce(protein_accession, '') as protein_accession,
+                coalesce(gene, '') as gene,
+                coalesce(product, '') as product
+            from features
+            where feature_type = 'CDS'
+              and seqid = ?
+              and protein_accession is not null
+            order by start_nt, end_nt, protein_accession
+            """,
+            [seqid],
+        ).pl()
+
+
+def _anchor_feature_row(db: Path, anchor: dict[str, object]) -> dict[str, object]:
+    protein_accession = str(anchor["protein_accession"])
+    locus_tag = str(anchor["locus_tag"])
+    gene = str(anchor["gene"])
+    with duckdb.connect(str(db), read_only=True) as connection:
+        row = connection.execute(
+            """
+            select
+                seqid,
+                source,
+                feature_type,
+                start_nt,
+                end_nt,
+                strand,
+                phase,
+                coalesce(feature_id, '') as feature_id,
+                coalesce(parent_id, '') as parent_id,
+                coalesce(locus_tag, '') as locus_tag,
+                coalesce(protein_accession, '') as protein_accession,
+                coalesce(gene, '') as gene,
+                coalesce(product, '') as product
+            from features
+            where feature_type = 'CDS'
+              and protein_accession = ?
+            order by start_nt, end_nt
+            limit 1
+            """,
+            [protein_accession],
+        ).fetchone()
+        if row is None and locus_tag:
+            row = connection.execute(
+                """
+                select
+                    seqid, source, feature_type, start_nt, end_nt, strand, phase,
+                    coalesce(feature_id, '') as feature_id,
+                    coalesce(parent_id, '') as parent_id,
+                    coalesce(locus_tag, '') as locus_tag,
+                    coalesce(protein_accession, '') as protein_accession,
+                    coalesce(gene, '') as gene,
+                    coalesce(product, '') as product
+                from features
+                where feature_type = 'CDS'
+                  and locus_tag = ?
+                order by start_nt, end_nt
+                limit 1
+                """,
+                [locus_tag],
+            ).fetchone()
+        if row is None and gene:
+            row = connection.execute(
+                """
+                select
+                    seqid, source, feature_type, start_nt, end_nt, strand, phase,
+                    coalesce(feature_id, '') as feature_id,
+                    coalesce(parent_id, '') as parent_id,
+                    coalesce(locus_tag, '') as locus_tag,
+                    coalesce(protein_accession, '') as protein_accession,
+                    coalesce(gene, '') as gene,
+                    coalesce(product, '') as product
+                from features
+                where feature_type = 'CDS'
+                  and gene = ?
+                order by start_nt, end_nt
+                limit 1
+                """,
+                [gene],
+            ).fetchone()
+    if row is None:
+        raise ValueError(f"anchor feature not found: {anchor}")
+    columns = list(FEATURE_SCHEMA.keys())
+    return dict(zip(columns, row, strict=True))
+
+
+def _feature_key(row: dict[str, object]) -> tuple[str, str, str]:
+    return (
+        str(row["protein_accession"]),
+        str(row["locus_tag"]),
+        str(row["gene"]),
+    )
+
+
+def _safe_identifier(value: str) -> str:
+    return "".join(character if character.isalnum() else "_" for character in value)
+
+
+def _empty_loci_genes() -> tuple[pl.DataFrame, pl.DataFrame]:
+    return (
+        validate(pl.DataFrame(schema=LOCI_OUTPUT_SCHEMA), LociSchema),
+        validate(pl.DataFrame(schema=GENES_OUTPUT_SCHEMA), GenesSchema),
+    )
+
+
+def extract_refseq_neighborhoods(
+    anchor_hits: pl.DataFrame,
+    manifest: Path,
+    *,
+    root: Path,
+    window_genes: int = 10,
+) -> tuple[pl.DataFrame, pl.DataFrame]:
+    """Extract ±N CDS neighborhoods around RefSeq anchor hits."""
+
+    anchor_hits = validate(anchor_hits, AnchorHitsSchema)
+    if anchor_hits.is_empty():
+        return _empty_loci_genes()
+
+    catalogs = _catalog_paths(read_refseq_catalog_manifest(manifest, root=root))
+    loci_rows: list[dict[str, object]] = []
+    gene_rows: list[dict[str, object]] = []
+    created_at = datetime.now(UTC).replace(tzinfo=None)
+
+    for cluster_id, anchor in enumerate(anchor_hits.iter_rows(named=True), start=1):
+        dataset_name = str(anchor["dataset_name"])
+        db = catalogs.get(dataset_name)
+        if db is None:
+            raise ValueError(f"no RefSeq catalog for dataset: {dataset_name}")
+        anchor_feature = _anchor_feature_row(db, anchor)
+        cds = _read_cds_features(db, str(anchor_feature["seqid"]))
+        anchor_key = _feature_key(anchor_feature)
+        anchor_index = None
+        cds_rows = list(cds.iter_rows(named=True))
+        for index, feature in enumerate(cds_rows):
+            if _feature_key(feature) == anchor_key:
+                anchor_index = index
+                break
+        if anchor_index is None:
+            raise ValueError(f"anchor feature not found in contig CDS order: {anchor}")
+
+        start_index = max(0, anchor_index - window_genes)
+        end_index = min(len(cds_rows) - 1, anchor_index + window_genes)
+        anchor_accession = str(anchor_feature["protein_accession"]) or str(
+            anchor["protein_accession"],
+        )
+        anchor_family = str(anchor["anchor_family"])
+        locus_id = (
+            f"{str(anchor['analyte']).lower()}__{dataset_name}__"
+            f"{_safe_identifier(anchor_family)}__"
+            f"{anchor_accession or str(anchor_feature['locus_tag'])}"
+        )
+        loci_rows.append(
+            {
+                "locus_id": locus_id,
+                "analyte": str(anchor["analyte"]),
+                "anchor_accession": anchor_accession,
+                "anchor_family": anchor_family,
+                "organism": dataset_name,
+                "taxon_id": 0,
+                "cluster_id": cluster_id,
+                "contig_id": str(anchor_feature["seqid"]),
+                "window_size": end_index - start_index + 1,
+                "is_boundary_truncated": start_index == 0
+                or end_index == len(cds_rows) - 1,
+                "marker_genes_present": [anchor_family],
+                "accessory_genes_present": [],
+                "locus_score": 0.0,
+                "locus_confidence": "low",
+                "taxonomic_context_score": 0.0,
+                "operon_integrity_score": 0.0,
+                "created_at": created_at,
+            },
+        )
+        anchor_start = int(str(anchor_feature["start_nt"]))
+        for feature_index in range(start_index, end_index + 1):
+            feature = cds_rows[feature_index]
+            relative_index = feature_index - anchor_index
+            gene_accession = (
+                str(feature["protein_accession"])
+                or str(feature["feature_id"])
+                or str(feature["locus_tag"])
+            )
+            gene_rows.append(
+                {
+                    "locus_id": locus_id,
+                    "gene_accession": gene_accession,
+                    "relative_index": relative_index,
+                    "relative_start": int(str(feature["start_nt"])) - anchor_start,
+                    "relative_stop": int(str(feature["end_nt"])) - anchor_start,
+                    "strand": str(feature["strand"])
+                    if feature["strand"] in ["+", "-"]
+                    else "+",
+                    "product_description": str(feature["product"]),
+                    "pfam_ids": [],
+                    "pfam_descriptions": [],
+                    "interpro_ids": [],
+                    "interpro_descriptions": [],
+                    "functional_class": "anchor"
+                    if relative_index == 0
+                    else "unknown",
+                    "regulator_class": "none",
+                    "sensory_domains": [],
+                    "is_anchor": relative_index == 0,
+                    "is_regulator_candidate": False,
+                },
+            )
+
+    loci = pl.DataFrame(
+        loci_rows,
+        schema_overrides=LOCI_OUTPUT_SCHEMA,
+    )
+    genes = pl.DataFrame(
+        gene_rows,
+        schema_overrides=GENES_OUTPUT_SCHEMA,
+    )
+    return validate(loci, LociSchema), validate(genes, GenesSchema)

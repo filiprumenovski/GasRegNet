@@ -6,6 +6,8 @@ from pathlib import Path
 import duckdb
 
 from gasregnet.datasets.refseq import (
+    detect_refseq_anchor_hits,
+    extract_refseq_neighborhoods,
     index_refseq_corpus,
     index_refseq_dataset,
     query_refseq_catalog,
@@ -108,3 +110,70 @@ targets:
     assert results["protein_accession"].item() == "NP_000002.1"
     assert scan["analyte"].item() == "CN"
     assert scan["gene"].item() == "cydA"
+
+
+def test_detect_anchors_and_extract_refseq_neighborhoods(tmp_path: Path) -> None:
+    protein_faa = tmp_path / "proteins.faa.gz"
+    with gzip.open(protein_faa, "wt", encoding="utf-8") as handle:
+        handle.write(
+            ">NP_000010.1 upstream protein\nMA\n"
+            ">NP_000011.1 cytochrome bd subunit\nMAGATA\n"
+            ">NP_000012.1 downstream protein\nMAA\n",
+        )
+    gff = tmp_path / "genome.gff.gz"
+    with gzip.open(gff, "wt", encoding="utf-8") as handle:
+        handle.write(
+            "##gff-version 3\n"
+            "ctg\tRefSeq\tCDS\t10\t99\t.\t+\t0\t"
+            "ID=cds-NP_000010.1;locus_tag=GRN_0010;protein_id=NP_000010.1;"
+            "gene=up;product=upstream%20protein\n"
+            "ctg\tRefSeq\tCDS\t110\t199\t.\t+\t0\t"
+            "ID=cds-NP_000011.1;locus_tag=GRN_0011;protein_id=NP_000011.1;"
+            "gene=cydA;product=cytochrome%20bd-I%20subunit%201\n"
+            "ctg\tRefSeq\tCDS\t210\t299\t.\t-\t0\t"
+            "ID=cds-NP_000012.1;locus_tag=GRN_0012;protein_id=NP_000012.1;"
+            "gene=down;product=downstream%20protein\n",
+        )
+    manifest = tmp_path / "catalogs.yaml"
+    manifest.write_text(
+        """
+catalogs:
+  - dataset_name: mini
+    protein_faa: proteins.faa.gz
+    gff: genome.gff.gz
+    out_db: mini.duckdb
+""",
+        encoding="utf-8",
+    )
+    scan_config = tmp_path / "scan.yaml"
+    scan_config.write_text(
+        """
+targets:
+  - analyte: CN
+    terms:
+      - cydA
+""",
+        encoding="utf-8",
+    )
+    index_refseq_corpus(manifest, root=tmp_path)
+
+    anchor_hits = detect_refseq_anchor_hits(
+        manifest,
+        scan_config,
+        root=tmp_path,
+        mode="smoke",
+    )
+    loci, genes = extract_refseq_neighborhoods(
+        anchor_hits,
+        manifest,
+        root=tmp_path,
+        window_genes=1,
+    )
+
+    assert anchor_hits["anchor_family"].item() == "cydA"
+    assert anchor_hits["evidence_type"].item() == "term_scan"
+    assert loci.height == 1
+    assert loci["anchor_accession"].item() == "NP_000011.1"
+    assert genes.height == 3
+    assert genes.filter(genes["is_anchor"])["gene_accession"].item() == "NP_000011.1"
+    assert genes["relative_index"].to_list() == [-1, 0, 1]

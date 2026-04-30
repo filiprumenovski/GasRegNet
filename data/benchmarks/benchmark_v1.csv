@@ -1,1 +1,31 @@
 benchmark_id,analyte,protein_name,uniprot_accession,organism,taxon_id,anchor_family,expected_regulator_class,expected_sensory_domains,sensing_evidence_class,pmid,notes
+co_seed_001,CO,cooS,,Rhodospirillum rubrum,1085,cooS,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_002,CO,cooF,,Rhodospirillum rubrum,1085,cooF,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_003,CO,cooC,,Rhodospirillum rubrum,1085,cooC,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_004,CO,coxL,,Oligotropha carboxidovorans,504832,coxL,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_005,CO,coxM,,Oligotropha carboxidovorans,504832,coxM,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_006,CO,coxS,,Oligotropha carboxidovorans,504832,coxS,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_007,CO,carbon monoxide dehydrogenase,,Hydrogenophaga pseudoflava,47421,carbon monoxide dehydrogenase,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_008,CO,carbon-monoxide dehydrogenase,,Mycobacterium smegmatis,1772,carbon monoxide dehydrogenase,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_009,CO,anaerobic carbon monoxide dehydrogenase,,Carboxydothermus hydrogenoformans,129958,cooS,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+co_seed_010,CO,aerobic carbon monoxide dehydrogenase,,Pseudomonas carboxydohydrogena,70775,coxL,unknown,[],inferred,[],Seed CO anchor benchmark row; literature curation pending
+cn_seed_001,CN,cydA,,Escherichia coli K-12 MG1655,511145,cydA,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_002,CN,cydB,,Escherichia coli K-12 MG1655,511145,cydB,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_003,CN,cydX,,Escherichia coli K-12 MG1655,511145,cydX,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_004,CN,cytochrome bd-I ubiquinol oxidase subunit I,,Escherichia coli K-12 MG1655,511145,cydA,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_005,CN,cytochrome bd-I ubiquinol oxidase subunit II,,Escherichia coli K-12 MG1655,511145,cydB,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_006,CN,cytochrome bd ubiquinol oxidase subunit X,,Escherichia coli K-12 MG1655,511145,cydX,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_007,CN,cytochrome bd-II ubiquinol oxidase subunit I,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_008,CN,cytochrome bd-II ubiquinol oxidase subunit II,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_009,CN,appC,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+cn_seed_010,CN,appB,,Escherichia coli K-12 MG1655,511145,cytochrome bd,unknown,[],inferred,[],Seed CN anchor benchmark row expected in the small RefSeq corpus
+neg_seed_001,negative_control,lacZ,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control metabolic enzyme
+neg_seed_002,negative_control,lacY,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control transporter
+neg_seed_003,negative_control,trpA,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_004,negative_control,trpB,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_005,negative_control,hisG,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_006,negative_control,leuA,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_007,negative_control,argG,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_008,negative_control,pyrB,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control biosynthetic enzyme
+neg_seed_009,negative_control,galK,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control carbohydrate enzyme
+neg_seed_010,negative_control,malE,,Escherichia coli K-12 MG1655,511145,,none,[],none,[],Negative control periplasmic binding protein

@@ -3,9 +3,10 @@
 GasRegNet is a comparative genomics package for discovering candidate bacterial
 gas-sensing transcriptional regulators. It implements the project contracts in
 `ARCHITECTURE.md`, `PREPRINT_PLAN.md`, and `ENGINEERING_PROMPT.md`: validated
-configuration, EFI-GNT SQLite ingestion, annotation, scoring, enrichment,
-archetype clustering, report tables, figures, captions, manifests, and a local
-Snakemake reproducibility path.
+configuration, EFI-GNT SQLite ingestion, DuckDB RefSeq catalogs, corpus anchor
+detection, RefSeq neighborhood extraction, annotation, scoring, enrichment,
+archetype clustering, report tables, figures, captions, manifests, and local
+Snakemake reproducibility paths.
 
 ## Quickstart
 
@@ -17,6 +18,7 @@ make index-datasets
 make lint
 make test
 make repro
+make corpus-repro
 ```
 
 `make repro` runs the deterministic mini EFI-GNT SQLite fixture through the
@@ -29,8 +31,11 @@ implemented pipeline and writes a complete local report bundle under
 - six result-led `captions/*.md` files
 - `manifest.json` and `config.resolved.yaml`
 
-The fixture demonstrates the engineering path. Publication-scale biological
-claims still require the curated benchmark and real EFI-GNT input assets.
+The fixture demonstrates the engineering path. `make corpus-repro` downloads the
+configured RefSeq assets, indexes them into DuckDB, detects smoke-mode anchors,
+extracts RefSeq neighborhoods, and writes a report bundle under
+`results/corpus/`. Smoke-mode anchor detection is term based; DIAMOND/HMMER
+evidence mode is scaffolded as the next scientific upgrade.
 
 ## Development
 
@@ -53,14 +58,21 @@ under ignored `databases/`.
 `make summarize-datasets` reports catalog sizes and feature-linkage counts.
 `make scan-datasets` scans indexed catalogs for configured gas-anchor terms and
 writes `results/refseq_anchor_scan.csv`.
+`make corpus-repro` runs the small RefSeq corpus workflow end to end and writes
+`anchor_hits.parquet`, canonical `loci.parquet` and `genes.parquet`, scored
+tables, figures, captions, and a run manifest under `results/corpus/`.
 
 ## CLI
 
 ```bash
 uv run gasregnet validate-config --config configs --out results/config_check
 uv run gasregnet build-benchmark --out data/benchmarks/benchmark_v1.csv
+uv run gasregnet detect-anchors --out results/corpus/intermediate/anchor_hits.parquet
+uv run gasregnet extract-neighborhoods --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus
+uv run gasregnet evaluate-benchmark --anchor-hits results/corpus/intermediate/anchor_hits.parquet --out results/corpus/tables/T1_benchmark_recovery.csv
 uv run gasregnet run-sqlite --sqlite tests/fixtures/mini_efi.sqlite --analytes CO --analytes CN --config configs --out results/sqlite_demo
 uv run gasregnet diamond-search --query data/seeds/co_anchor_seeds.faa --db databases/bacteria.dmnd --out cache/co_diamond_hits.parquet
+uv run gasregnet corpus-discovery --out results/corpus
 ```
 
 External search commands require their corresponding local databases and

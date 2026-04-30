@@ -1,0 +1,7 @@
+mode: smoke
+out_dir: results/corpus
+catalogs: configs/refseq_catalogs.yaml
+scan_config: configs/refseq_scan.yaml
+benchmark: data/benchmarks/benchmark_v1.csv
+window_genes: 10
+seed: 20260429

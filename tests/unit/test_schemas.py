@@ -36,6 +36,31 @@ def loci_frame() -> pl.DataFrame:
     )
 
 
+def anchor_hits_frame() -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            "dataset_name": ["ecoli_k12_mg1655"],
+            "analyte": ["CN"],
+            "anchor_family": ["cydA"],
+            "protein_accession": ["NP_415261.2"],
+            "locus_tag": ["b0733"],
+            "gene": ["cydA"],
+            "product": ["cytochrome bd-I ubiquinol oxidase subunit I"],
+            "bitscore": [None],
+            "e_value": [None],
+            "identity": [None],
+            "coverage": [None],
+            "evidence_type": ["term_scan"],
+        },
+        schema_overrides={
+            "bitscore": pl.Float64,
+            "e_value": pl.Float64,
+            "identity": pl.Float64,
+            "coverage": pl.Float64,
+        },
+    )
+
+
 def genes_frame() -> pl.DataFrame:
     return pl.DataFrame(
         {
@@ -157,6 +182,7 @@ def benchmark_frame() -> pl.DataFrame:
 @pytest.mark.parametrize(
     ("schema", "factory"),
     [
+        (schemas.AnchorHitsSchema, anchor_hits_frame),
         (schemas.LociSchema, loci_frame),
         (schemas.GenesSchema, genes_frame),
         (schemas.RegulatorCandidatesSchema, candidates_frame),
@@ -175,6 +201,7 @@ def test_schema_accepts_valid_frame(
 @pytest.mark.parametrize(
     ("schema", "factory"),
     [
+        (schemas.AnchorHitsSchema, anchor_hits_frame),
         (schemas.LociSchema, loci_frame),
         (schemas.GenesSchema, genes_frame),
         (schemas.RegulatorCandidatesSchema, candidates_frame),
@@ -196,6 +223,7 @@ def test_schema_rejects_missing_column(
 @pytest.mark.parametrize(
     ("schema", "factory"),
     [
+        (schemas.AnchorHitsSchema, anchor_hits_frame),
         (schemas.LociSchema, loci_frame),
         (schemas.GenesSchema, genes_frame),
         (schemas.RegulatorCandidatesSchema, candidates_frame),
