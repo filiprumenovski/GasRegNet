@@ -1,0 +1,9 @@
+analytes:
+  - configs/analytes/co.yaml
+  - configs/analytes/cn.yaml
+regulator_families: configs/regulator_families.yaml
+sensory_domains: configs/sensory_domains.yaml
+scoring: configs/scoring.yaml
+benchmark: configs/benchmarks.yaml
+window: standard
+seed: 20260429

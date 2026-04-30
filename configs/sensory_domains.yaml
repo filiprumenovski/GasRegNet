@@ -1,0 +1,34 @@
+sensory_domains:
+  - domain: PAS
+    pfam_id: PF00989
+    chemistry: heme
+  - domain: PAS
+    pfam_id: PF13426
+    chemistry: heme
+  - domain: PAS
+    pfam_id: PF14598
+    chemistry: heme
+  - domain: GAF
+    pfam_id: PF01590
+    chemistry: generic_signal
+  - domain: Cache
+    pfam_id: PF02743
+    chemistry: generic_signal
+  - domain: Cache
+    pfam_id: PF13185
+    chemistry: generic_signal
+  - domain: HAMP
+    pfam_id: PF00672
+    chemistry: generic_signal
+  - domain: CBS
+    pfam_id: PF00571
+    chemistry: redox
+  - domain: GGDEF
+    pfam_id: PF00990
+    chemistry: generic_signal
+  - domain: EAL
+    pfam_id: PF00563
+    chemistry: generic_signal
+  - domain: HD-GYP
+    pfam_id: PF13487
+    chemistry: generic_signal

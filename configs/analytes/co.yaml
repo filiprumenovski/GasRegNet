@@ -1,0 +1,20 @@
+analyte: CO
+display_name: "carbon monoxide"
+anchor_seeds: data/seeds/co_anchor_seeds.faa
+anchor_families:
+  - name: coxL
+    pfam_required: ["PF02738"]
+    pfam_supporting: ["PF03450", "PF01799"]
+    role: primary
+  - name: coxM
+    pfam_required: ["PF03450"]
+    role: accessory
+  - name: coxS
+    pfam_required: ["PF01799"]
+    role: accessory
+window_genes: 10
+known_organisms_table: data/references/known_co_organisms.csv
+expected_sensory_chemistry:
+  - heme
+  - iron_sulfur
+seed: 20260429

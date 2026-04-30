@@ -1,0 +1,4 @@
+axes.spines.top: False
+axes.spines.right: False
+figure.dpi: 120
+savefig.dpi: 300

@@ -1,0 +1,12 @@
+.venv/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.coverage
+__pycache__/
+*.py[cod]
+.DS_Store
+results/*
+!results/.gitkeep
+cache/
+.snakemake/

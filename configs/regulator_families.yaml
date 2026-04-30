@@ -1,0 +1,57 @@
+regulator_families:
+  - family: FNR/CRP
+    class: one_component
+    pfam_required: ["PF00027"]
+    pfam_optional: ["PF00325"]
+  - family: LysR
+    class: one_component
+    pfam_required: ["PF00126"]
+    pfam_optional: ["PF03466"]
+  - family: GntR
+    class: one_component
+    pfam_required: ["PF00392"]
+    pfam_optional: []
+  - family: AraC
+    class: one_component
+    pfam_required: ["PF12833"]
+    pfam_optional: []
+  - family: MarR
+    class: one_component
+    pfam_required: ["PF01047"]
+    pfam_optional: []
+  - family: TetR
+    class: one_component
+    pfam_required: ["PF00440"]
+    pfam_optional: []
+  - family: MerR
+    class: one_component
+    pfam_required: ["PF00376"]
+    pfam_optional: []
+  - family: LacI
+    class: one_component
+    pfam_required: ["PF00356"]
+    pfam_optional: []
+  - family: ArsR/SmtB
+    class: one_component
+    pfam_required: ["PF01022"]
+    pfam_optional: []
+  - family: LuxR/GerE
+    class: one_component
+    pfam_required: ["PF00196"]
+    pfam_optional: []
+  - family: XRE
+    class: one_component
+    pfam_required: ["PF01381"]
+    pfam_optional: []
+  - family: response_regulator
+    class: two_component_rr
+    pfam_required: ["PF00072"]
+    pfam_optional: []
+  - family: histidine_kinase
+    class: two_component_hk
+    pfam_required: ["PF00512"]
+    pfam_optional: ["PF02518"]
+  - family: sigma_70
+    class: sigma
+    pfam_required: ["PF04542"]
+    pfam_optional: ["PF04545"]

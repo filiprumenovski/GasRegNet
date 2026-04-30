@@ -1,0 +1,20 @@
+analyte: CN
+display_name: "hydrogen cyanide"
+anchor_seeds: data/seeds/cn_anchor_seeds.faa
+anchor_families:
+  - name: cydA
+    pfam_required: ["PF01654"]
+    role: primary
+  - name: cydB
+    pfam_required: ["PF02322"]
+    role: primary
+  - name: cydX
+    pfam_required: ["PF13456"]
+    role: accessory
+window_genes: 10
+known_organisms_table: data/references/known_cn_organisms.csv
+expected_sensory_chemistry:
+  - cysteine_rich
+  - flavin
+  - heme
+seed: 20260429
