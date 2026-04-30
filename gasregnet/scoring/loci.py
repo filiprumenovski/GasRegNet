@@ -104,6 +104,6 @@ def score_loci(loci: pl.DataFrame, scoring: ScoringConfig) -> pl.DataFrame:
     )
     scored = scored.with_columns(_confidence_expr(scoring).alias("locus_confidence"))
 
-    base_columns = list(LociSchema.columns.keys())
+    base_columns = [column for column in LociSchema.columns if column in scored.columns]
     validate(scored.select(base_columns), LociSchema)
     return pl.DataFrame(scored, schema_overrides=SCORED_LOCI_SCHEMA_OVERRIDES)

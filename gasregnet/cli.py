@@ -919,8 +919,11 @@ def score_command(
     genes = read_parquet(input_dir / "genes.parquet", GenesSchema)
     scored_loci = score_loci(loci, cfg.scoring)
     candidates = score_candidates(scored_loci, genes, cfg.scoring)
+    locus_columns = [
+        column for column in LociSchema.columns if column in scored_loci.columns
+    ]
     write_parquet(
-        scored_loci.select(list(LociSchema.columns.keys())),
+        scored_loci.select(locus_columns),
         out / "intermediate" / "loci.parquet",
         LociSchema,
     )

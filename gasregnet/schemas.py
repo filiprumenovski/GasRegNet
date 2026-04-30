@@ -78,6 +78,12 @@ LociSchema = _schema(
         "taxonomic_context_score": _column(pl.Float64),
         "operon_integrity_score": _column(pl.Float64),
         "created_at": _column(pl.Datetime("us")),
+        "phylum": _column(pl.Utf8, required=False),
+        "class": _column(pl.Utf8, required=False),
+        "order": _column(pl.Utf8, required=False),
+        "family": _column(pl.Utf8, required=False),
+        "genus": _column(pl.Utf8, required=False),
+        "conservation_across_taxa_score": _column(pl.Float64, required=False),
     },
 )
 

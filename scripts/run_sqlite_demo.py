@@ -36,6 +36,7 @@ from gasregnet.schemas import (
     SensorRegulatorPairsSchema,
 )
 from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.conservation import compute_conservation_scores
 from gasregnet.scoring.enrichment import run_enrichment
 from gasregnet.scoring.loci import score_loci
 from scripts.build_test_fixtures import build_mini_efi
@@ -52,11 +53,8 @@ def _write_frame_set(
     sensor_regulator_pairs: pl.DataFrame,
 ) -> None:
     intermediate = out_dir / "intermediate"
-    write_parquet(
-        loci.select(list(LociSchema.columns.keys())),
-        intermediate / "loci.parquet",
-        LociSchema,
-    )
+    locus_columns = [column for column in LociSchema.columns if column in loci.columns]
+    write_parquet(loci.select(locus_columns), intermediate / "loci.parquet", LociSchema)
     write_parquet(genes, intermediate / "genes.parquet", GenesSchema)
     write_parquet(
         candidates,
@@ -145,6 +143,14 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         alpha=config.scoring.enrichment.alpha,
     )
     candidates = score_candidates(scored_loci, genes, config.scoring, enrichment)
+    archetypes = cluster_archetypes(scored_loci, candidates)
+    candidates = compute_conservation_scores(
+        candidates,
+        archetypes,
+        scored_loci,
+        min_loci_per_archetype=1,
+        scoring=config.scoring,
+    )
     archetypes = cluster_archetypes(scored_loci, candidates)
     benchmark = _benchmark_recovery(candidates)
 
