@@ -1,17 +1,20 @@
-.PHONY: sync lint test assets datasets index-datasets summarize-datasets scan-datasets repro repro-real corpus-repro clean
+.PHONY: sync lint test assets profiles datasets index-datasets summarize-datasets scan-datasets repro repro-real corpus-repro clean
 
 sync:
 	uv sync --extra dev
 
 lint:
 	uv run ruff check gasregnet scripts tests
-	uv run mypy --strict gasregnet scripts/fetch_assets.py scripts/build_test_fixtures.py scripts/run_corpus_discovery.py
+	uv run mypy --strict gasregnet scripts/fetch_assets.py scripts/build_test_fixtures.py scripts/build_profiles.py scripts/run_corpus_discovery.py
 
 test:
 	uv run pytest -q --cov=gasregnet
 
 assets:
 	uv run gasregnet fetch-assets --manifest configs/assets.yaml --force
+
+profiles:
+	uv run gasregnet build-profiles --config configs --out-dir data/profiles --manifest-out data/profiles/profiles.yaml
 
 datasets:
 	uv run gasregnet fetch-assets --manifest configs/datasets.yaml --downloader aria2 --force

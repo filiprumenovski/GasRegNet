@@ -174,6 +174,49 @@ def fetch_assets_command(
         click.echo(path)
 
 
+@app.command("build-profiles", help="Build HMM profiles from anchor seed FASTAs.")
+@click.option(
+    "--config",
+    default=Path("configs"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="GasRegNet config directory or headline config.",
+)
+@click.option(
+    "--out-dir",
+    default=Path("data/profiles"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Profile output directory.",
+)
+@click.option(
+    "--manifest-out",
+    default=Path("data/profiles/profiles.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Profile manifest YAML output.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def build_profiles_command(
+    config: Path,
+    out_dir: Path,
+    manifest_out: Path,
+    verbose: bool,
+) -> None:
+    """Build HMM profiles from configured anchor seed FASTAs."""
+
+    configure_logging(verbose=verbose)
+    from scripts.build_profiles import build_profiles
+
+    manifest = build_profiles(
+        config=config,
+        out_dir=out_dir,
+        manifest_out=manifest_out,
+    )
+    click.echo(f"wrote {manifest.height} profiles to {out_dir}")
+    click.echo(manifest_out)
+
+
 @app.command("index-refseq", help="Index RefSeq FASTA/GFF assets into DuckDB.")
 @click.option(
     "--protein-faa",

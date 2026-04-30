@@ -19,6 +19,7 @@ def test_help_lists_core_subcommands() -> None:
     for command in (
         "validate-config",
         "fetch-assets",
+        "build-profiles",
         "index-refseq",
         "index-refseq-corpus",
         "query-refseq",

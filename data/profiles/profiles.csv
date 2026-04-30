@@ -1,0 +1,7 @@
+analyte,anchor_family,profile,seed_faa,seed_accession,selection_rule,sha256
+CO,coxL,data/profiles/coxL.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,gene_symbol,09007aa48b2cea4be116ce3e405fb31fffc1a584fd0672f99e41ee2d48e3adfa
+CO,coxM,data/profiles/coxM.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,analyte_seed_fallback,cc3b065be86bdf36302885ba6bbf9813232742865a4cc9f7e37eaecac1573450
+CO,coxS,data/profiles/coxS.hmm,data/seeds/co_anchor_seeds.faa,sp|P19919|DCML_AFIC5,analyte_seed_fallback,08fbe11588ea72f4c31f09eaf903fdf82218931d94e6321de3eafe802ca45d70
+CN,cydA,data/profiles/cydA.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABJ9|CYDA_ECOLI,gene_symbol,88e31dd18d609a4285ac419b06aa275dfbf55984a137bdcc7154d120278fe0ad
+CN,cydB,data/profiles/cydB.hmm,data/seeds/cn_anchor_seeds.faa,sp|P0ABK2|CYDB_ECOLI,gene_symbol,089844af3354e6a839be20a9df8853096361d6883692351c16b658e5d506a213
+CN,cydX,data/profiles/cydX.hmm,data/seeds/cn_anchor_seeds.faa,sp|P56100|CYDX_ECOLI,gene_symbol,b51fc30dd5946e7e6671160d121013d74714cc95b5502c86c0dc4553259ae05a

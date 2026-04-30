@@ -65,6 +65,25 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
         ).pl()
 
 
+def _family_guard_terms(anchor_family: str) -> tuple[str, ...]:
+    return {
+        "coxL": ("coxl", "carbon monoxide", "co dehydrogenase"),
+        "coxM": ("coxm", "carbon monoxide", "co dehydrogenase"),
+        "coxS": ("coxs", "carbon monoxide", "co dehydrogenase"),
+        "cydA": ("cyda", "appc", "cytochrome bd"),
+        "cydB": ("cydb", "appb", "cytochrome bd"),
+        "cydX": ("cydx",),
+    }.get(anchor_family, (anchor_family.lower(),))
+
+
+def _passes_family_guard(row: dict[str, object], anchor_family: str) -> bool:
+    haystack = " ".join(
+        str(row.get(column, ""))
+        for column in ("protein_accession", "locus_tag", "gene", "product")
+    ).lower()
+    return any(term in haystack for term in _family_guard_terms(anchor_family))
+
+
 def _hits_for_family(
     *,
     dataset_name: str,
@@ -110,6 +129,14 @@ def _hits_for_family(
             ],
         )
         .select(list(ANCHOR_HITS_SCHEMA))
+        .filter(
+            pl.struct(
+                ["protein_accession", "locus_tag", "gene", "product"],
+            ).map_elements(
+                lambda row: _passes_family_guard(row, anchor_family),
+                return_dtype=pl.Boolean,
+            ),
+        )
         .unique(
             subset=[
                 "dataset_name",
