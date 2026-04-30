@@ -12,6 +12,7 @@ Snakemake reproducibility path.
 ```bash
 make sync
 make assets
+make datasets
 make lint
 make test
 make repro
@@ -44,6 +45,8 @@ uv run pytest -q --cov=gasregnet
 Runtime outputs are written under `results/` and are ignored by version control.
 External seed FASTAs are declared in `configs/assets.yaml` and can be refreshed
 with `make assets`.
+Larger local datasets are declared in `configs/datasets.yaml`, downloaded with
+`aria2c` by `make datasets`, and written under ignored `data/external/`.
 
 ## CLI
 

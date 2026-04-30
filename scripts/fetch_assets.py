@@ -24,9 +24,9 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--downloader",
-        choices=["auto", "wget", "urllib"],
+        choices=["auto", "aria2", "wget", "urllib"],
         default="auto",
-        help="Download backend. auto prefers wget when installed.",
+        help="Download backend. auto prefers aria2c, then wget.",
     )
     parser.add_argument("--force", action="store_true", help="Refetch existing assets.")
     return parser.parse_args()

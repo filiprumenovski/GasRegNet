@@ -121,10 +121,10 @@ def _fallback_benchmark(candidates_path: Path) -> Path:
 )
 @click.option(
     "--downloader",
-    type=click.Choice(["auto", "wget", "urllib"]),
+    type=click.Choice(["auto", "aria2", "wget", "urllib"]),
     default="auto",
     show_default=True,
-    help="Download backend. auto prefers wget when installed.",
+    help="Download backend. auto prefers aria2c, then wget.",
 )
 @click.option("--force", is_flag=True, help="Refetch existing assets.")
 @click.option("--verbose", is_flag=True, help="Enable debug logs.")

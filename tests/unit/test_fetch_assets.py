@@ -19,6 +19,7 @@ def test_fetch_assets_concatenates_urls_and_checks_hash(tmp_path: Path) -> None:
 assets:
   - name: mini
     output: data/seeds/mini.faa
+    combine: concat_text
     sha256: {digest}
     urls:
       - {source_a.as_uri()}
@@ -35,4 +36,33 @@ assets:
     )
 
     assert written == [tmp_path / "data" / "seeds" / "mini.faa"]
+    assert written[0].read_bytes() == payload
+
+
+def test_fetch_assets_preserves_single_file_bytes(tmp_path: Path) -> None:
+    source = tmp_path / "archive.gz"
+    payload = b"\x1f\x8b\x08\x00binary"
+    source.write_bytes(payload)
+    digest = hashlib.sha256(payload).hexdigest()
+    manifest = tmp_path / "assets.yaml"
+    manifest.write_text(
+        f"""
+assets:
+  - name: binary
+    output: data/external/archive.gz
+    sha256: {digest}
+    urls:
+      - {source.as_uri()}
+""",
+        encoding="utf-8",
+    )
+
+    written = fetch_assets(
+        manifest,
+        root=tmp_path,
+        downloader="urllib",
+        force=True,
+    )
+
+    assert written == [tmp_path / "data" / "external" / "archive.gz"]
     assert written[0].read_bytes() == payload

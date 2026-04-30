@@ -9,4 +9,6 @@ __pycache__/
 results/*
 !results/.gitkeep
 cache/
+data/external/
+databases/
 .snakemake/

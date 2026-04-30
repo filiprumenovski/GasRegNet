@@ -1,0 +1,13 @@
+assets:
+  - name: ecoli_k12_mg1655_proteins
+    output: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_protein.faa.gz
+    sha256: 283c91ff66d0597f2488fd1c00ad40f8d0a0b37a92f981b6148d75fa4a934896
+    urls:
+      - https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_protein.faa.gz
+    notes: NCBI RefSeq protein FASTA for Escherichia coli K-12 MG1655.
+  - name: ecoli_k12_mg1655_gff
+    output: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_genomic.gff.gz
+    sha256: 7aa71ffaef2caa51e5cb00da96d567c8001c19f029a173d3df3b273331a587b2
+    urls:
+      - https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/005/845/GCF_000005845.2_ASM584v2/GCF_000005845.2_ASM584v2_genomic.gff.gz
+    notes: NCBI RefSeq GFF3 annotation for Escherichia coli K-12 MG1655.

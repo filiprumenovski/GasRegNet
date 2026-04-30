@@ -1,4 +1,4 @@
-.PHONY: sync lint test assets repro repro-real clean
+.PHONY: sync lint test assets datasets repro repro-real clean
 
 sync:
 	uv sync --extra dev
@@ -12,6 +12,9 @@ test:
 
 assets:
 	uv run gasregnet fetch-assets --manifest configs/assets.yaml --force
+
+datasets:
+	uv run gasregnet fetch-assets --manifest configs/datasets.yaml --downloader aria2 --force
 
 repro:
 	uv run snakemake -s workflows/sqlite_mode.smk --cores 1
