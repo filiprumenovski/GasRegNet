@@ -24,6 +24,7 @@ def test_figure_1_caption_uses_benchmark_counts() -> None:
             "benchmark_id": ["known_a", "known_b"],
             "organism": ["Org1", "Org2"],
             "hit": [True, False],
+            "is_negative_control": [False, False],
         },
     )
 

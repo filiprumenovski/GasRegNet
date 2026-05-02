@@ -83,6 +83,7 @@ def compute_conservation_scores(
     loci: pl.DataFrame,
     *,
     min_loci_per_archetype: int = 3,
+    min_taxa_per_archetype: int = 3,
     scoring: ScoringConfig | None = None,
 ) -> pl.DataFrame:
     """Compute archetype conservation and taxonomic breadth per candidate."""
@@ -125,7 +126,17 @@ def compute_conservation_scores(
             ),
         )
         updated["archetype_id"] = archetype_id
-        if len(arch_loci) < min_loci_per_archetype:
+        genus_count = len(
+            {genus for locus in arch_loci if (genus := _taxonomy(locus, "genus"))},
+        )
+        family_count = len(
+            {family for locus in arch_loci if (family := _taxonomy(locus, "family"))},
+        )
+        taxon_count = max(genus_count, family_count)
+        if (
+            len(arch_loci) < min_loci_per_archetype
+            or taxon_count < min_taxa_per_archetype
+        ):
             updated["archetype_conservation_score"] = 0.0
             updated["taxonomic_breadth_score"] = 0.0
         else:

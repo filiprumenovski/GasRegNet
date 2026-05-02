@@ -82,7 +82,7 @@ def test_operon_score_band_adds_ordered_94_percent_bands() -> None:
         < top["regulation_logit_score"]
         < top["score_band_high"]
     )
-    assert top["score_band_model"] == "baseline_logit_beta_score_band_94"
+    assert top["score_band_model"] == "uncalibrated_sigmoid_beta_score_band_94"
 
 
 def test_synthetic_truth_corpus_recovers_planted_regulators_above_decoys() -> None:

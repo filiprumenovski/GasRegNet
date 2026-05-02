@@ -69,6 +69,7 @@ class EnrichmentConfig(StrictModel):
     permutations: int = Field(gt=0)
     stratum_column: str = "genus"
     strict_policy: Literal["none", "one_per_genus", "one_per_family"] = "one_per_family"
+    score_cap: float = Field(default=3.0, ge=0.0)
 
 
 class WindowConfig(StrictModel):

@@ -19,6 +19,7 @@ ARCHETYPE_SCHEMA: dict[str, Any] = {
     "archetype_id": pl.Utf8,
     "analyte": pl.Utf8,
     "cluster_id": pl.Int32,
+    "architecture_scope": pl.Utf8,
     "architecture_string": pl.Utf8,
     "n_loci": pl.Int32,
     "n_taxa": pl.Int32,
@@ -30,11 +31,38 @@ ARCHETYPE_SCHEMA: dict[str, Any] = {
 }
 
 
+def _sorted_label(values: object) -> str:
+    if not isinstance(values, list | tuple | set):
+        return "none"
+    labels = sorted(str(value) for value in values if str(value))
+    return "+".join(labels) if labels else "none"
+
+
+def _distance_bin(distance_nt: object) -> str:
+    distance = abs(int(cast(int, distance_nt)))
+    if distance <= 250:
+        return "near"
+    if distance <= 1000:
+        return "mid"
+    return "far"
+
+
 def _candidate_token(candidate: dict[str, object]) -> str:
     relative_index = int(cast(int, candidate["relative_index"]))
     regulator_class = str(candidate["regulator_class"])
-    sensory_domains = "-".join(cast(list[str], candidate["sensory_domains"])) or "none"
-    return f"[{relative_index}:{regulator_class}:{sensory_domains}]"
+    sensory_domains = _sorted_label(candidate["sensory_domains"])
+    dna_binding = _sorted_label(candidate.get("dna_binding_domains", []))
+    strand = str(candidate.get("strand") or "?")
+    distance = _distance_bin(candidate.get("distance_nt", 0))
+    return (
+        f"[{relative_index}:{regulator_class}:{sensory_domains}:"
+        f"dna={dna_binding}:strand={strand}:dist={distance}]"
+    )
+
+
+def _anchor_token(locus: dict[str, object]) -> str:
+    accessories = _sorted_label(locus.get("accessory_genes_present", []))
+    return f"[0:{locus['anchor_family']}:accessory={accessories}]"
 
 
 def architecture_string(
@@ -47,7 +75,7 @@ def architecture_string(
         (_candidate_token(candidate) for candidate in candidates),
         key=lambda token: int(token.split(":", 1)[0].removeprefix("[")),
     )
-    anchor = f"[0:{locus['anchor_family']}]"
+    anchor = _anchor_token(locus)
     return "".join([*candidate_tokens, anchor])
 
 
@@ -172,6 +200,7 @@ def cluster_archetypes(
                 "archetype_id": f"arch_{index:04d}",
                 "analyte": representative["analyte"],
                 "cluster_id": representative["cluster_id"],
+                "architecture_scope": "locus_neighborhood",
                 "architecture_string": representative["architecture_string"],
                 "n_loci": len(cluster),
                 "n_taxa": len({int(cast(int, row["taxon_id"])) for row in cluster}),

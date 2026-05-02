@@ -226,7 +226,6 @@ def run_sqlite_demo(*, out_dir: Path, config_path: Path, sqlite_path: Path) -> P
         candidates,
         archetypes,
         scored_loci,
-        min_loci_per_archetype=1,
         scoring=config.scoring,
     )
     candidates = assign_phylogenetic_profile_scores(

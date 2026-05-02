@@ -1,4 +1,4 @@
-"""Deterministic score-band calibration for regulation hypotheses."""
+"""Deterministic, uncalibrated score bands for regulation hypotheses."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from scipy.stats import beta  # type: ignore[import-untyped]
 from gasregnet.schemas import RegulatorCandidatesSchema, validate
 from gasregnet.scoring.candidates import CANDIDATE_SCHEMA
 
-SCORE_BAND_MODEL_NAME = "baseline_logit_beta_score_band_94"
+SCORE_BAND_MODEL_NAME = "uncalibrated_sigmoid_beta_score_band_94"
 
 
 def _sigmoid(value: float) -> float:
@@ -30,7 +30,7 @@ def assign_operon_regulation_score_bands(
     midpoint: float = 6.0,
     scale: float = 2.0,
 ) -> pl.DataFrame:
-    """Convert decomposable evidence scores into deterministic score bands."""
+    """Convert decomposable evidence scores into deterministic, uncalibrated bands."""
 
     candidates = validate(candidates, RegulatorCandidatesSchema)
     if candidates.is_empty():

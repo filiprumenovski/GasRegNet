@@ -128,7 +128,11 @@ def archetypes_frame() -> pl.DataFrame:
             "archetype_id": ["arch1"],
             "analyte": ["CO"],
             "cluster_id": pl.Series([1], dtype=pl.Int32),
-            "architecture_string": ["[-1:TF:PAS][0:coxL]"],
+            "architecture_scope": ["locus_neighborhood"],
+            "architecture_string": [
+                "[-1:TF:PAS:dna=HTH:strand=+:dist=near]"
+                "[0:coxL:accessory=coxM]",
+            ],
             "n_loci": pl.Series([1], dtype=pl.Int32),
             "n_taxa": pl.Series([1], dtype=pl.Int32),
             "representative_locus_id": ["CO_1_anchor"],

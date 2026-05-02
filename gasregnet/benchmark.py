@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 import polars as pl
 
@@ -11,12 +12,21 @@ from gasregnet.schemas import BenchmarkSchema, validate
 BENCHMARK_RECOVERY_SCHEMA = {
     "benchmark_id": pl.Utf8,
     "analyte": pl.Utf8,
+    "sensing_evidence_class": pl.Utf8,
+    "is_negative_control": pl.Boolean,
+    "verified_pmid": pl.Boolean,
     "protein_name": pl.Utf8,
     "organism": pl.Utf8,
     "hit": pl.Boolean,
     "rank": pl.Int64,
     "candidate_score": pl.Float64,
     "regulation_logit_score": pl.Float64,
+}
+BENCHMARK_SUMMARY_SCHEMA = {
+    "metric": pl.Utf8,
+    "value": pl.Float64,
+    "n": pl.Int64,
+    "notes": pl.Utf8,
 }
 BENCHMARK_LIST_COLUMNS = ("expected_sensory_domains", "pmid")
 
@@ -171,6 +181,9 @@ def evaluate_benchmark(
             {
                 "benchmark_id": str(benchmark_row["benchmark_id"]),
                 "analyte": str(benchmark_row["analyte"]),
+                "sensing_evidence_class": str(benchmark_row["sensing_evidence_class"]),
+                "is_negative_control": is_negative,
+                "verified_pmid": bool(benchmark_row.get("verify_pmid", False)),
                 "protein_name": protein_name,
                 "organism": str(benchmark_row["organism"]),
                 "hit": hit,
@@ -182,3 +195,146 @@ def evaluate_benchmark(
     if not rows:
         return pl.DataFrame(schema=BENCHMARK_RECOVERY_SCHEMA)
     return pl.DataFrame(rows, schema_overrides=BENCHMARK_RECOVERY_SCHEMA)
+
+
+def _binary_auc(labels: list[int], scores: list[float]) -> float | None:
+    positives = sum(labels)
+    negatives = len(labels) - positives
+    if positives == 0 or negatives == 0:
+        return None
+    ordered = sorted(zip(scores, labels, strict=True), key=lambda item: item[0])
+    rank_sum = 0.0
+    index = 0
+    while index < len(ordered):
+        end = index + 1
+        while end < len(ordered) and ordered[end][0] == ordered[index][0]:
+            end += 1
+        average_rank = (index + 1 + end) / 2.0
+        rank_sum += average_rank * sum(label for _, label in ordered[index:end])
+        index = end
+    return (rank_sum - positives * (positives + 1) / 2.0) / (positives * negatives)
+
+
+def _average_precision(labels: list[int], scores: list[float]) -> float | None:
+    positives = sum(labels)
+    if positives == 0:
+        return None
+    ordered = sorted(
+        zip(scores, labels, strict=True),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+    recovered = 0
+    precision_sum = 0.0
+    for rank, (_, label) in enumerate(ordered, start=1):
+        if label == 1:
+            recovered += 1
+            precision_sum += recovered / rank
+    return precision_sum / positives
+
+
+def _metric_row(
+    metric: str,
+    value: float | None,
+    n: int,
+    notes: str,
+) -> dict[str, object]:
+    return {
+        "metric": metric,
+        "value": None if value is None else float(value),
+        "n": n,
+        "notes": notes,
+    }
+
+
+def _mean_bool(series: pl.Series) -> float | None:
+    value = series.mean()
+    return None if value is None else float(cast(float, value))
+
+
+def summarize_benchmark_recovery(recovery: pl.DataFrame) -> pl.DataFrame:
+    """Summarize recovery with recall, FPR, top-k, and ranking metrics."""
+
+    if recovery.is_empty():
+        return pl.DataFrame(schema=BENCHMARK_SUMMARY_SCHEMA)
+    if "is_negative_control" not in recovery.columns:
+        recovery = recovery.with_columns(
+            (pl.col("analyte") == "negative_control").alias("is_negative_control"),
+        )
+    if "sensing_evidence_class" not in recovery.columns:
+        recovery = recovery.with_columns(
+            pl.lit("unspecified").alias("sensing_evidence_class"),
+        )
+    if "verified_pmid" not in recovery.columns:
+        recovery = recovery.with_columns(pl.lit(False).alias("verified_pmid"))
+
+    positives = recovery.filter(~pl.col("is_negative_control"))
+    negatives = recovery.filter(pl.col("is_negative_control"))
+    direct = positives.filter(pl.col("sensing_evidence_class") == "direct")
+    verified = positives.filter(pl.col("verified_pmid"))
+
+    rows: list[dict[str, object]] = [
+        _metric_row(
+            "positive_recall",
+            _mean_bool(positives["hit"]) if positives.height else None,
+            positives.height,
+            "All non-negative benchmark rows.",
+        ),
+        _metric_row(
+            "direct_positive_recall",
+            _mean_bool(direct["hit"]) if direct.height else None,
+            direct.height,
+            "Direct evidence positives only.",
+        ),
+        _metric_row(
+            "verified_positive_recall",
+            _mean_bool(verified["hit"]) if verified.height else None,
+            verified.height,
+            "Positive rows with verify_pmid=true.",
+        ),
+        _metric_row(
+            "negative_false_positive_rate",
+            _mean_bool(~negatives["hit"]) if negatives.height else None,
+            negatives.height,
+            "Negative-control rows where a recovery was observed.",
+        ),
+    ]
+    for k in (1, 5, 10):
+        ranked = positives.filter(pl.col("rank").is_not_null())
+        rows.append(
+            _metric_row(
+                f"top_{k}_recall",
+                (
+                    _mean_bool(ranked["rank"] <= k)
+                    if ranked.height and positives.height
+                    else None
+                ),
+                ranked.height,
+                f"Positive benchmark rows with candidate rank <= {k}.",
+            ),
+        )
+
+    scored = recovery.filter(pl.col("candidate_score").is_not_null())
+    if scored.height:
+        labels = [
+            0 if bool(row["is_negative_control"]) else 1
+            for row in scored.iter_rows(named=True)
+        ]
+        scores = [float(row["candidate_score"]) for row in scored.iter_rows(named=True)]
+        rows.extend(
+            [
+                _metric_row(
+                    "candidate_score_auroc",
+                    _binary_auc(labels, scores),
+                    scored.height,
+                    "AUROC over benchmark rows with candidate scores.",
+                ),
+                _metric_row(
+                    "candidate_score_auprc",
+                    _average_precision(labels, scores),
+                    scored.height,
+                    "Average precision over benchmark rows with candidate scores.",
+                ),
+            ],
+        )
+    return pl.DataFrame(rows, schema_overrides=BENCHMARK_SUMMARY_SCHEMA)

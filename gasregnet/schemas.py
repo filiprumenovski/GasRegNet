@@ -219,6 +219,10 @@ ArchetypesSchema = _schema(
         "archetype_id": _column(pl.Utf8),
         "analyte": _column(pl.Utf8, checks=pa.Check.isin(ANALYTES)),
         "cluster_id": _column(pl.Int32),
+        "architecture_scope": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(["locus_neighborhood"]),
+        ),
         "architecture_string": _column(pl.Utf8),
         "n_loci": _column(pl.Int32),
         "n_taxa": _column(pl.Int32),

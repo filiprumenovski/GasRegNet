@@ -4,7 +4,11 @@ from pathlib import Path
 
 import polars as pl
 
-from gasregnet.benchmark import evaluate_benchmark, load_benchmark_csv
+from gasregnet.benchmark import (
+    evaluate_benchmark,
+    load_benchmark_csv,
+    summarize_benchmark_recovery,
+)
 
 
 def test_evaluate_benchmark_reports_positive_and_negative_recovery(
@@ -46,6 +50,53 @@ def test_evaluate_benchmark_reports_positive_and_negative_recovery(
 
     assert recovery["benchmark_id"].to_list() == ["cn1", "neg1"]
     assert recovery["hit"].to_list() == [True, True]
+    assert recovery["is_negative_control"].to_list() == [False, True]
+
+
+def test_summarize_benchmark_recovery_reports_validation_metrics(
+    tmp_path: Path,
+) -> None:
+    benchmark = tmp_path / "benchmark.csv"
+    benchmark.write_text(
+        "benchmark_id,analyte,protein_name,uniprot_accession,organism,taxon_id,"
+        "anchor_family,expected_regulator_class,expected_sensory_domains,"
+        "sensing_evidence_class,pmid,notes,first_publication,verify_pmid\n"
+        "pos1,CO,regA,,Org,1,coxL,one_component,[],direct,123,hit,paper,true\n"
+        "neg1,negative_control,regB,,Org,1,,none,[],none,[],miss,,false\n",
+        encoding="utf-8",
+    )
+    anchor_hits = pl.DataFrame(
+        {
+            "dataset_name": ["org"],
+            "analyte": ["CO"],
+            "anchor_family": ["coxL"],
+            "protein_accession": ["regA"],
+            "locus_tag": [""],
+            "gene": ["regA"],
+            "product": ["regA"],
+            "bitscore": [1.0],
+            "e_value": [1e-20],
+            "identity": [1.0],
+            "coverage": [1.0],
+            "evidence_type": ["term_scan"],
+        },
+    )
+    candidates = pl.DataFrame(
+        {
+            "gene_accession": ["regA", "regB"],
+            "candidate_score": [10.0, 1.0],
+            "regulation_logit_score": [0.9, 0.1],
+        },
+    )
+
+    recovery = evaluate_benchmark(benchmark, anchor_hits, candidates)
+    summary = summarize_benchmark_recovery(recovery)
+    metrics = {row["metric"]: row for row in summary.iter_rows(named=True)}
+
+    assert metrics["positive_recall"]["value"] == 1.0
+    assert metrics["direct_positive_recall"]["value"] == 1.0
+    assert metrics["negative_false_positive_rate"]["value"] == 0.0
+    assert metrics["candidate_score_auroc"]["value"] == 1.0
 
 
 def test_regulators_v2_benchmark_has_required_groups() -> None:

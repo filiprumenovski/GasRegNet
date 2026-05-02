@@ -4,7 +4,7 @@ targets:
       - coxL
       - cooS
       - carbon monoxide dehydrogenase
-  - analyte: CN
+  - analyte: cyd_control
     terms:
       - cydA
       - cydB

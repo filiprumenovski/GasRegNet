@@ -117,3 +117,18 @@ def test_conservation_rewards_cross_genus_and_cross_family_architectures() -> No
     assert broad["archetype_conservation_score"].mean() > 0.9
     assert narrow["archetype_conservation_score"].mean() < 0.4
     assert broad["archetype_id"].str.len_chars().min() > 0
+
+
+def test_conservation_does_not_reward_singleton_even_if_min_loci_is_lowered() -> None:
+    loci = _loci("singleton", ["GenusA"], ["FamA"])
+    candidates = _candidates(loci["locus_id"].to_list())
+
+    scored = compute_conservation_scores(
+        candidates,
+        cluster_archetypes(loci, candidates),
+        loci,
+        min_loci_per_archetype=1,
+    )
+
+    assert scored["archetype_conservation_score"].item() == 0.0
+    assert scored["taxonomic_breadth_score"].item() == 0.0

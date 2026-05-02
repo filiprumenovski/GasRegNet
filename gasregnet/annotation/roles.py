@@ -69,6 +69,9 @@ def _sensor_chemistries(
     pfam_ids: set[str],
     catalog: dict[str, SensoryDomainEntry],
     paired_evidence_rules: list[SensoryPairedEvidenceRule],
+    *,
+    evidence_terms: set[str] | None = None,
+    organism_kingdom: str | None = None,
 ) -> list[str]:
     chemistries: list[str] = [
         entry.chemistry
@@ -78,10 +81,21 @@ def _sensor_chemistries(
         and entry.chemistry != "none"
     ]
     for rule in paired_evidence_rules:
-        if set(rule.if_pfam_all).issubset(pfam_ids) and (
-            not rule.if_co_pfam_any or bool(set(rule.if_co_pfam_any) & pfam_ids)
+        if not set(rule.if_pfam_all).issubset(pfam_ids):
+            continue
+        if rule.if_co_pfam_any and not bool(set(rule.if_co_pfam_any) & pfam_ids):
+            continue
+        if rule.if_motif_any and not bool(
+            {motif.lower() for motif in rule.if_motif_any}
+            & (evidence_terms or set()),
         ):
-            chemistries.append(rule.rescore.chemistry)
+            continue
+        if (
+            rule.if_organism_kingdom is not None
+            and (organism_kingdom or "").lower() != rule.if_organism_kingdom.lower()
+        ):
+            continue
+        chemistries.append(rule.rescore.chemistry)
     return sorted(set(chemistries))
 
 
@@ -89,8 +103,17 @@ def _has_sensor_evidence(
     pfam_ids: set[str],
     catalog: dict[str, SensoryDomainEntry],
     paired_evidence_rules: list[SensoryPairedEvidenceRule],
+    *,
+    evidence_terms: set[str] | None = None,
+    organism_kingdom: str | None = None,
 ) -> bool:
-    if _sensor_chemistries(pfam_ids, catalog, paired_evidence_rules):
+    if _sensor_chemistries(
+        pfam_ids,
+        catalog,
+        paired_evidence_rules,
+        evidence_terms=evidence_terms,
+        organism_kingdom=organism_kingdom,
+    ):
         return True
     return any(
         (entry := catalog.get(pfam_id)) is not None and entry.role == "sensor"
@@ -118,6 +141,22 @@ def _pfam_id_set(pfam_ids: object) -> set[str]:
     else:
         return set()
     return {str(pfam_id) for pfam_id in values}
+
+
+def _evidence_terms(row: dict[str, object]) -> set[str]:
+    terms: set[str] = set()
+    for column in (
+        "sensory_domains",
+        "pfam_descriptions",
+        "interpro_descriptions",
+        "product_description",
+    ):
+        value = row.get(column)
+        if isinstance(value, str):
+            terms.add(value.lower())
+        elif isinstance(value, list | tuple | set):
+            terms.update(str(item).lower() for item in value)
+    return terms
 
 
 def _sensor_role(
@@ -163,12 +202,22 @@ def assign_sensor_roles(
             return_dtype=pl.Utf8,
         )
         .alias("__inferred_regulator_class"),
-        pl.col("pfam_ids")
+        pl.struct(
+            [
+                "pfam_ids",
+                "sensory_domains",
+                "pfam_descriptions",
+                "interpro_descriptions",
+                "product_description",
+            ],
+        )
         .map_elements(
-            lambda pfam_ids: _has_sensor_evidence(
-                _pfam_id_set(pfam_ids),
+            lambda row: _has_sensor_evidence(
+                _pfam_id_set(row["pfam_ids"]),
                 catalog,
                 paired_evidence_rules,
+                evidence_terms=_evidence_terms(row),
+                organism_kingdom=str(row.get("superkingdom") or ""),
             ),
             return_dtype=pl.Boolean,
         )

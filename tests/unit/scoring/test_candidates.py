@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 
 from gasregnet.config import load_config
-from gasregnet.scoring.candidates import score_candidates
+from gasregnet.scoring.candidates import expected_chemistry_by_analyte, score_candidates
 from tests.unit.test_schemas import loci_frame
 
 
@@ -84,6 +84,63 @@ def test_score_candidates_reproduces_hand_computed_ranking() -> None:
     assert top["sensory_domain_score"].item() == 2.0
     assert top["enrichment_score"].item() == pytest.approx(3.0)
     assert top["candidate_score_q"].item() == 0.02
+
+
+def test_score_candidates_caps_extreme_enrichment_effects() -> None:
+    config = load_config(Path("configs"))
+    loci = loci_frame().with_columns(pl.lit(6.0).alias("locus_score"))
+    enrichment = _enrichment().with_columns(
+        pl.when(pl.col("feature_type") == "regulator_class")
+        .then(pl.lit(1024.0))
+        .otherwise(pl.col("odds_ratio"))
+        .alias("odds_ratio"),
+    )
+
+    candidates = score_candidates(loci, _genes(), config.scoring, enrichment)
+
+    top = candidates.filter(pl.col("gene_accession") == "near_pas")
+    assert top["enrichment_score"].item() == pytest.approx(
+        config.scoring.enrichment.score_cap,
+    )
+
+
+def test_paired_evidence_requires_declared_motif_evidence() -> None:
+    config = load_config(Path("configs"))
+    base_gene = _genes().filter(pl.col("gene_accession") == "far_plain").with_columns(
+        pl.Series("gene_accession", ["cooa_like"], dtype=pl.Utf8),
+        pl.Series("pfam_ids", [["PF00027", "PF00325"]], dtype=pl.List(pl.Utf8)),
+        pl.Series("pfam_descriptions", [["cNMP"]], dtype=pl.List(pl.Utf8)),
+        pl.Series("sensory_domains", [["cNMP_binding"]], dtype=pl.List(pl.Utf8)),
+    )
+    motif_gene = base_gene.with_columns(
+        pl.Series(
+            "gene_accession",
+            ["cooa_motif_supported"],
+            dtype=pl.Utf8,
+        ),
+        pl.Series(
+            "pfam_descriptions",
+            [["cNMP", "heme_b_histidine"]],
+            dtype=pl.List(pl.Utf8),
+        ),
+    )
+    genes = pl.concat([base_gene, motif_gene], how="vertical")
+
+    candidates = score_candidates(
+        loci_frame(),
+        genes,
+        config.scoring,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+        expected_chemistry_by_analyte=expected_chemistry_by_analyte(config.analytes),
+    )
+
+    no_motif = candidates.filter(pl.col("gene_accession") == "cooa_like")
+    with_motif = candidates.filter(pl.col("gene_accession") == "cooa_motif_supported")
+    assert no_motif["primary_sensory_chemistry"].item() == "cnmp"
+    assert no_motif["sensory_domain_score"].item() == pytest.approx(0.25)
+    assert with_motif["primary_sensory_chemistry"].item() == "heme"
+    assert with_motif["sensory_domain_score"].item() == pytest.approx(1.0)
 
 
 def test_score_candidates_populates_required_fields_and_rationale() -> None:

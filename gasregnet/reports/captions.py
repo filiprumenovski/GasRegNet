@@ -42,8 +42,12 @@ def _float_text(value: Any, digits: int = 2) -> str:
 def figure_1_workflow_and_recovery_caption(benchmark_results: pl.DataFrame) -> str:
     """Caption for benchmark recovery and workflow figure."""
 
-    recovered = _count_value(benchmark_results, "hit", True)
-    total = benchmark_results.height
+    if "is_negative_control" in benchmark_results.columns:
+        positives = benchmark_results.filter(~pl.col("is_negative_control"))
+    else:
+        positives = benchmark_results
+    recovered = _count_value(positives, "hit", True)
+    total = positives.height
     organisms = _unique_count(benchmark_results, "organism")
     return (
         "GasRegNet recovers "
@@ -57,7 +61,7 @@ def figure_2_locus_landscape_caption(loci: pl.DataFrame) -> str:
 
     counts = [
         f"{analyte} {_count_value(loci, 'analyte', analyte)}"
-        for analyte in ("CO", "NO", "CN", "O2")
+        for analyte in ("CO", "NO", "CN", "cyd_control", "O2")
     ]
     high_confidence = _count_value(loci, "locus_confidence", "high")
     taxa = _unique_count(loci, "taxon_id")
@@ -72,7 +76,7 @@ def figure_3_archetype_atlas_caption(archetypes: pl.DataFrame) -> str:
     """Caption for recurrent gene-architecture atlas."""
 
     clauses: list[str] = []
-    for analyte in ("CO", "NO", "CN", "O2"):
+    for analyte in ("CO", "NO", "CN", "cyd_control", "O2"):
         subset = archetypes.filter(pl.col("analyte") == analyte)
         total_loci = float(subset.select(pl.col("n_loci").sum()).item() or 0)
         top_loci = float(
@@ -108,7 +112,7 @@ def figure_4_chemistry_partition_caption(enrichment: pl.DataFrame) -> str:
 
 
 def figure_5_candidate_ranking_caption(candidates: pl.DataFrame) -> str:
-    """Caption for operon-level regulation score-band figure."""
+    """Caption for deterministic, uncalibrated score-band figure."""
 
     if "regulation_logit_score" in candidates.columns:
         high_confidence = candidates.filter(
@@ -133,9 +137,9 @@ def figure_5_candidate_ranking_caption(candidates: pl.DataFrame) -> str:
     top = candidates.sort(sort_column, descending=True).row(0, named=True)
     if sort_column == "regulation_logit_score":
         return (
-            "GasRegNet reports deterministic operon-level regulation scores for "
+            "GasRegNet reports deterministic, uncalibrated score bands for "
             "candidate regulation hypotheses, with "
-            f"{high_confidence} candidates at logit score >=0.80; top score "
+            f"{high_confidence} candidates at score >=0.80; top score "
             f"is {top['candidate_id']} in {top['organism']} "
             f"({_float_text(top['regulation_logit_score'])}, 94% score band "
             f"[{_float_text(top['score_band_low'])}, "

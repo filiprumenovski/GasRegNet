@@ -14,9 +14,10 @@ def test_tool_feature_comparison_marks_gasregnet_features() -> None:
     gasregnet = matrix.filter(pl.col("tool") == "GasRegNet")
 
     assert gasregnet["matched_control_enrichment"].item() is True
-    assert gasregnet["fdr_controlled_candidates"].item() is True
-    assert gasregnet["operon_level_score_band"].item() is True
+    assert gasregnet["fdr_controlled_candidates"].item() is False
+    assert gasregnet["uncalibrated_score_band"].item() is True
     assert gasregnet["phylogenetic_profile_cooccurrence"].item() is True
+    assert gasregnet["structural_prioritization"].item() is False
 
 
 def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> None:
@@ -30,6 +31,9 @@ def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> No
             pl.lit("CooA").alias("protein_name"),
             pl.lit("Org").alias("organism"),
             pl.lit(True).alias("hit"),
+            pl.lit("direct").alias("sensing_evidence_class"),
+            pl.lit(False).alias("is_negative_control"),
+            pl.lit(True).alias("verified_pmid"),
             pl.lit(1).alias("rank"),
             pl.lit(9.0).alias("candidate_score"),
         )
@@ -38,7 +42,7 @@ def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> No
         [
             candidates_frame(),
             candidates_frame().with_columns(
-                pl.lit("CN").alias("analyte"),
+                pl.lit("cyd_control").alias("analyte"),
                 pl.lit("cand2").alias("candidate_id"),
             ),
         ],
@@ -53,6 +57,7 @@ def test_write_publication_tables_outputs_csv_and_markdown(tmp_path: Path) -> No
     )
 
     assert set(outputs) == {
+        "T0_benchmark_validation_summary",
         "T1_benchmark_recovery",
         "T2_top30_co_candidates",
         "T3_top30_cyd_control_candidates",

@@ -1480,7 +1480,6 @@ def score_command(
         candidates,
         archetypes,
         scored_loci,
-        min_loci_per_archetype=1,
         scoring=cfg.scoring,
     )
     candidates = assign_phylogenetic_profile_scores(

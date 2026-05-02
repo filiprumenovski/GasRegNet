@@ -121,16 +121,18 @@ def _proximity_score(relative_index: int) -> float:
 
 def _enrichment_lookup(
     enrichment: pl.DataFrame | None,
+    scoring: ScoringConfig,
 ) -> dict[tuple[str, str], tuple[float, float]]:
     if enrichment is None or enrichment.is_empty():
         return {}
     lookup: dict[tuple[str, str], tuple[float, float]] = {}
+    score_cap = scoring.enrichment.score_cap
     for row in enrichment.iter_rows(named=True):
         odds_ratio = float(row["odds_ratio"])
         q_value = float(row["q_value"])
         enrichment_score = 0.0
         if q_value <= 0.05 and odds_ratio > 1.0:
-            enrichment_score = math.log2(odds_ratio)
+            enrichment_score = min(math.log2(odds_ratio), score_cap)
         lookup[(str(row["feature_type"]), str(row["feature_name"]))] = (
             enrichment_score,
             q_value,
@@ -204,12 +206,50 @@ def _catalog_by_pfam(
     return {entry.pfam_id: entry for entry in entries}
 
 
+def _evidence_terms(*values: object) -> set[str]:
+    terms: set[str] = set()
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, str):
+            terms.add(value.lower())
+            continue
+        if isinstance(value, list | tuple | set):
+            terms.update(str(item).lower() for item in value)
+    return terms
+
+
+def _paired_evidence_rule_matches(
+    rule: SensoryPairedEvidenceRule,
+    *,
+    pfam_ids: set[str],
+    evidence_terms: set[str],
+    organism_kingdom: str | None,
+) -> bool:
+    if not set(rule.if_pfam_all).issubset(pfam_ids):
+        return False
+    if rule.if_co_pfam_any and not bool(set(rule.if_co_pfam_any) & pfam_ids):
+        return False
+    if rule.if_motif_any and not bool(
+        {motif.lower() for motif in rule.if_motif_any} & evidence_terms,
+    ):
+        return False
+    if (
+        rule.if_organism_kingdom is not None
+        and (organism_kingdom or "").lower() != rule.if_organism_kingdom.lower()
+    ):
+        return False
+    return True
+
+
 def _sensor_chemistries(
     *,
     domains: list[str],
     pfam_ids: set[str],
     sensory_domain_catalog: list[SensoryDomainEntry] | None,
     paired_evidence_rules: list[SensoryPairedEvidenceRule] | None,
+    evidence_terms: set[str] | None = None,
+    organism_kingdom: str | None = None,
 ) -> list[str]:
     by_domain = _catalog_by_domain(sensory_domain_catalog)
     by_pfam = _catalog_by_pfam(sensory_domain_catalog)
@@ -223,8 +263,11 @@ def _sensor_chemistries(
         if entry is not None and entry.role == "sensor" and entry.chemistry != "none":
             chemistries.append(entry.chemistry)
     for rule in paired_evidence_rules or []:
-        if set(rule.if_pfam_all).issubset(pfam_ids) and (
-            not rule.if_co_pfam_any or bool(set(rule.if_co_pfam_any) & pfam_ids)
+        if _paired_evidence_rule_matches(
+            rule,
+            pfam_ids=pfam_ids,
+            evidence_terms=evidence_terms or set(),
+            organism_kingdom=organism_kingdom,
         ):
             chemistries.append(rule.rescore.chemistry)
     return sorted(set(chemistries))
@@ -238,6 +281,8 @@ def _sensory_domain_score(
     sensory_domain_catalog: list[SensoryDomainEntry] | None,
     paired_evidence_rules: list[SensoryPairedEvidenceRule] | None,
     expected_chemistry_by_analyte: dict[str, set[str]] | None,
+    evidence_terms: set[str] | None = None,
+    organism_kingdom: str | None = None,
 ) -> tuple[float, str]:
     if sensory_domain_catalog is None or expected_chemistry_by_analyte is None:
         primary = sensory_domains[0] if sensory_domains else "none"
@@ -247,6 +292,8 @@ def _sensory_domain_score(
         pfam_ids=pfam_ids,
         sensory_domain_catalog=sensory_domain_catalog,
         paired_evidence_rules=paired_evidence_rules,
+        evidence_terms=evidence_terms,
+        organism_kingdom=organism_kingdom,
     )
     if not chemistries:
         return 0.0, "none"
@@ -270,7 +317,7 @@ def score_candidates(
     """Extract and score regulator candidates near scored loci."""
 
     locus_lookup = {str(row["locus_id"]): row for row in loci.iter_rows(named=True)}
-    enrichment_scores = _enrichment_lookup(enrichment)
+    enrichment_scores = _enrichment_lookup(enrichment, scoring)
     rows: list[dict[str, object]] = []
 
     for gene in genes.filter(pl.col("is_regulator_candidate")).iter_rows(named=True):
@@ -286,6 +333,13 @@ def score_candidates(
             sensory_domain_catalog=sensory_domain_catalog,
             paired_evidence_rules=paired_evidence_rules,
             expected_chemistry_by_analyte=expected_chemistry_by_analyte,
+            evidence_terms=_evidence_terms(
+                sensory_domains,
+                gene.get("pfam_descriptions"),
+                gene.get("interpro_descriptions"),
+                gene.get("product_description"),
+            ),
+            organism_kingdom=str(locus.get("superkingdom") or ""),
         )
         enrichment_score, q_value = _candidate_enrichment(gene, enrichment_scores)
         row: dict[str, object] = {

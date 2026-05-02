@@ -93,6 +93,7 @@ def test_cluster_archetypes_groups_identical_architectures() -> None:
 
     assert archetypes.height == 2
     first = archetypes.filter(pl.col("archetype_id") == "arch_0001")
+    assert first["architecture_scope"].item() == "locus_neighborhood"
     assert first["n_loci"].item() == 2
     assert first["n_taxa"].item() == 2
     assert first["representative_locus_id"].item() == "locus_a"
@@ -109,15 +110,44 @@ def test_cluster_archetypes_is_deterministic() -> None:
 
 def test_architecture_distance_weights_near_anchor_more_heavily() -> None:
     near_change = architecture_distance(
-        "[-1:one_component:PAS][0:coxL]",
-        "[-1:two_component_rr:none][0:coxL]",
+        "[-1:one_component:PAS:dna=PF01047:strand=+:dist=near]"
+        "[0:coxL:accessory=none]",
+        "[-1:two_component_rr:none:dna=PF00072:strand=+:dist=near]"
+        "[0:coxL:accessory=none]",
     )
     far_change = architecture_distance(
-        "[-5:one_component:PAS][0:coxL]",
-        "[-5:two_component_rr:none][0:coxL]",
+        "[-5:one_component:PAS:dna=PF01047:strand=+:dist=far]"
+        "[0:coxL:accessory=none]",
+        "[-5:two_component_rr:none:dna=PF00072:strand=+:dist=far]"
+        "[0:coxL:accessory=none]",
     )
 
     assert near_change > far_change
+
+
+def test_architecture_string_separates_strand_distance_and_accessory_context() -> None:
+    loci = _loci().with_columns(
+        pl.Series(
+            "accessory_genes_present",
+            [["coxM"], ["coxM"], ["coxS"]],
+            dtype=pl.List(pl.Utf8),
+        ),
+    )
+    candidates = _candidates().with_columns(
+        pl.Series("strand", ["+", "-", "+"], dtype=pl.Utf8),
+        pl.Series("distance_nt", [100, 100, 3000], dtype=pl.Int64),
+    )
+
+    archetypes = cluster_archetypes(loci, candidates)
+
+    assert archetypes.height == 3
+    encoded = "\n".join(archetypes["architecture_string"].to_list())
+    assert "strand=+" in encoded
+    assert "strand=-" in encoded
+    assert "dist=near" in encoded
+    assert "dist=far" in encoded
+    assert "accessory=coxM" in encoded
+    assert "accessory=coxS" in encoded
 
 
 def test_cluster_archetypes_threshold_can_merge_related_architectures() -> None:
