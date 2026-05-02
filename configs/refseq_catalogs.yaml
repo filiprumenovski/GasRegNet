@@ -3,3 +3,12 @@ catalogs:
     protein_faa: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_protein.faa.gz
     gff: data/external/ecoli_k12_mg1655/GCF_000005845.2_ASM584v2_genomic.gff.gz
     out_db: databases/ecoli_k12_mg1655.duckdb
+    taxonomy:
+      taxon_id: 511145
+      superkingdom: Bacteria
+      phylum: Pseudomonadota
+      class: Gammaproteobacteria
+      order: Enterobacterales
+      family: Enterobacteriaceae
+      genus: Escherichia
+      species: Escherichia coli

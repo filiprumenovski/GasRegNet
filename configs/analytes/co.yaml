@@ -5,6 +5,11 @@ anchor_families:
   - name: coxL
     pfam_required: ["PF02738"]
     pfam_supporting: ["PF03450", "PF01799"]
+    anchor_seeds: data/seeds/co_coxL_anchor_seeds.faa
+    role: primary
+  - name: cooS
+    pfam_required: ["PF03063"]
+    anchor_seeds: data/seeds/co_cooS_anchor_seeds.faa
     role: primary
   - name: coxM
     pfam_required: ["PF03450"]

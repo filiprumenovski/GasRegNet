@@ -6,7 +6,13 @@ import duckdb
 import polars as pl
 import pytest
 
-from gasregnet.search.anchors import _hits_for_family, detect_anchors_profile
+from gasregnet.config import load_config
+from gasregnet.search.anchors import (
+    _hits_for_family,
+    _passes_family_guard,
+    _seed_sequences,
+    detect_anchors_profile,
+)
 
 
 def _catalog(tmp_path: Path) -> Path:
@@ -67,6 +73,9 @@ def test_detect_anchors_profile_normalizes_hmmer_hits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     manifest = _catalog(tmp_path)
+    profile_dir = tmp_path / "profiles"
+    profile_dir.mkdir()
+    (profile_dir / "cydA.hmm").write_text("HMMER3/f\n", encoding="utf-8")
 
     def fake_hmmsearch(
         profile_hmm: Path,
@@ -103,14 +112,14 @@ def test_detect_anchors_profile_normalizes_hmmer_hits(
         manifest,
         config=Path("configs"),
         root=tmp_path,
-        profile_dir=tmp_path / "profiles",
+        profile_dir=profile_dir,
         e_value_threshold=1e-20,
         back_confirm_coverage=0.0,
     )
 
     assert hits.height == 1
     assert hits["dataset_name"].item() == "mini"
-    assert hits["analyte"].item() == "CN"
+    assert hits["analyte"].item() == "cyd_control"
     assert hits["anchor_family"].item() == "cydA"
     assert hits["protein_accession"].item() == "NP_TRUE.1"
     assert hits["locus_tag"].item() == "b0001"
@@ -161,3 +170,33 @@ def test_hits_for_family_filters_family_guard_vectorized(
 
     assert hits["protein_accession"].to_list() == ["NP_TRUE.1"]
     assert hits["locus_tag"].to_list() == ["b0001"]
+
+
+def test_co_seed_sequences_split_coxl_and_coos_without_downloads() -> None:
+    config = load_config(Path("configs"))
+
+    co_seeds = _seed_sequences(config)["CO"]
+
+    assert co_seeds["coxL"].startswith("MNIQTTV")
+    assert co_seeds["cooS"].startswith("MTHHDCA")
+    assert co_seeds["coxL"] != co_seeds["cooS"]
+
+
+def test_co_family_guard_keeps_coxl_and_coos_separate() -> None:
+    coxl_row = {
+        "protein_accession": "NP_COXL.1",
+        "locus_tag": "coxL",
+        "gene": "coxL",
+        "product": "aerobic carbon monoxide dehydrogenase large subunit",
+    }
+    coos_row = {
+        "protein_accession": "NP_COOS.1",
+        "locus_tag": "cooS",
+        "gene": "cooS",
+        "product": "anaerobic carbon monoxide dehydrogenase catalytic subunit",
+    }
+
+    assert _passes_family_guard(coxl_row, "coxL")
+    assert not _passes_family_guard(coxl_row, "cooS")
+    assert _passes_family_guard(coos_row, "cooS")
+    assert not _passes_family_guard(coos_row, "coxL")

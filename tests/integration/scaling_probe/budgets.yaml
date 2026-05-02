@@ -1,0 +1,11 @@
+small:
+  datasets: 3
+  genes_per_dataset: 32
+  window_genes: 4
+  min_anchor_hits: 12
+  min_loci: 12
+  min_genes: 80
+  max_anchor_hits: 32
+  max_loci: 32
+  max_genes: 320
+  max_seconds: 20.0

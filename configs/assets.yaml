@@ -16,3 +16,10 @@ assets:
       - https://rest.uniprot.org/uniprotkb/P0ABK2.fasta
       - https://rest.uniprot.org/uniprotkb/P56100.fasta
     notes: Reviewed Escherichia coli K-12 cytochrome bd-I cydA, cydB, and cydX anchors.
+  - name: ncbi_taxdump
+    output: data/external/ncbi_taxdump/taxdump.tar.gz
+    version: TODO-pin-real-ncbi-taxdump-snapshot
+    source_url: https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
+    urls:
+      - https://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz
+    notes: TODO compute sha256 from an actual committed or archived external taxdump snapshot before manuscript-scale runs; sha256 intentionally omitted until that snapshot exists.

@@ -38,6 +38,11 @@ def _genes(pfams: list[list[str]]) -> pl.DataFrame:
     )
 
 
+def _genes_for_loci(locus_ids: list[str], pfams: list[list[str]]) -> pl.DataFrame:
+    genes = _genes(pfams)
+    return genes.with_columns(pl.Series("locus_id", locus_ids, dtype=pl.Utf8))
+
+
 def _loci() -> pl.DataFrame:
     return pl.DataFrame(
         {
@@ -140,3 +145,70 @@ def test_assign_sensor_roles_classifies_rcom_and_arsr_as_both() -> None:
     assigned = _assign([["PF00027", "PF00325", "PF00989"], ["PF01022"]])
 
     assert assigned["sensor_role"].to_list() == ["both", "both"]
+
+
+def test_assign_sensor_roles_preserves_existing_regulator_candidates() -> None:
+    config = load_config("configs")
+    genes = _genes([[]]).with_columns(
+        pl.Series("regulator_class", ["sigma"], dtype=pl.Utf8),
+        pl.Series("is_regulator_candidate", [True], dtype=pl.Boolean),
+    )
+
+    assigned = assign_sensor_roles(
+        genes,
+        regulator_families=config.regulator_families,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    )
+
+    assert assigned["regulator_class"].item() == "sigma"
+    assert assigned["sensor_role"].item() == "regulator"
+    assert assigned["functional_class"].item() == "regulator"
+
+
+def test_build_sensor_regulator_pairs_vectorizes_across_loci() -> None:
+    config = load_config("configs")
+    genes = _genes_for_loci(
+        ["locus1", "locus1", "locus2", "locus2"],
+        [["PF00512", "PF00989"], ["PF00072", "PF00196"], ["PF00512"], ["PF00072"]],
+    ).with_columns(
+        pl.Series(
+            "regulator_class",
+            [
+                "two_component_hk",
+                "two_component_rr",
+                "two_component_hk",
+                "two_component_rr",
+            ],
+            dtype=pl.Utf8,
+        ),
+        pl.Series(
+            "sensor_role",
+            ["sensor", "regulator", "sensor", "regulator"],
+            dtype=pl.Utf8,
+        ),
+    )
+    loci = pl.concat(
+        [
+            _loci(),
+            _loci().with_columns(
+                pl.lit("locus2").alias("locus_id"),
+                pl.lit("NO").alias("analyte"),
+            ),
+        ],
+        how="vertical",
+    )
+
+    pairs = build_sensor_regulator_pairs(
+        genes,
+        loci,
+        sensory_domain_catalog=config.sensory_domains,
+        paired_evidence_rules=config.paired_evidence,
+    ).sort("pair_id")
+
+    assert pairs["pair_id"].to_list() == [
+        "locus1::gene0::gene1",
+        "locus2::gene2::gene3",
+    ]
+    assert pairs["analyte"].to_list() == ["CO", "NO"]
+    assert pairs["rr_dna_binding_domains"].to_list()[0] == ["PF00196"]

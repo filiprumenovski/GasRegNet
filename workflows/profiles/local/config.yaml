@@ -1,0 +1,14 @@
+cores: 8
+printshellcmds: true
+rerun-incomplete: true
+latency-wait: 30
+set-threads:
+  detect_anchors_shard: 8
+  extract_neighborhoods_shard: 4
+set-resources:
+  detect_anchors_shard:
+    mem_mb: 16000
+    runtime: 120
+  extract_neighborhoods_shard:
+    mem_mb: 8000
+    runtime: 60

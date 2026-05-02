@@ -1,13 +1,16 @@
 """Command-line interface for GasRegNet."""
 
+import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import click
 import polars as pl
 
 from gasregnet.annotation.domains import annotate_domains
 from gasregnet.annotation.ecology import score_taxonomic_context_by_analyte
+from gasregnet.annotation.ncbi_taxonomy import build_taxonomy_db
 from gasregnet.annotation.regulators import classify_regulators
 from gasregnet.annotation.roles import (
     assign_sensor_roles,
@@ -20,17 +23,24 @@ from gasregnet.benchmark import (
     load_benchmark_csv,
     write_benchmark_csv,
 )
+from gasregnet.check_tools import (
+    DEFAULT_TOOL_PROBES,
+    resolve_tools,
+    write_tools_resolved,
+)
 from gasregnet.config import load_config, resolve_and_dump
 from gasregnet.datasets.refseq import (
     detect_refseq_anchor_hits,
     extract_refseq_neighborhoods,
     index_refseq_corpus,
+    index_refseq_corpus_store,
     index_refseq_dataset,
     query_refseq_catalog,
     query_refseq_corpus,
     scan_refseq_corpus,
     summarize_refseq_corpus,
 )
+from gasregnet.datasets.sharding import read_shards, write_shards
 from gasregnet.io.parquet import read_parquet, write_parquet
 from gasregnet.io.sqlite_efi import read_efi_sqlite
 from gasregnet.logging import configure_logging
@@ -186,6 +196,47 @@ def fetch_assets_command(
         click.echo(path)
 
 
+@app.command("check-tools", help="Resolve external binaries for reproducibility.")
+@click.option(
+    "--out",
+    default=Path("tools_resolved.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="YAML path for resolved binary versions, paths, and checksums.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def check_tools_command(out: Path, verbose: bool) -> None:
+    """Write reproducibility metadata for external command-line tools."""
+
+    configure_logging(verbose=verbose)
+    try:
+        tools = resolve_tools(DEFAULT_TOOL_PROBES)
+    except (FileNotFoundError, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(write_tools_resolved(tools, out))
+
+
+@app.command("build-taxonomy-db", help="Build offline NCBI taxonomy DuckDB.")
+@click.option(
+    "--taxdump",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing uncompressed nodes.dmp and names.dmp.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="DuckDB taxonomy database to create.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def build_taxonomy_db_command(taxdump: Path, out: Path, verbose: bool) -> None:
+    """Build an offline taxonomy resolver database from NCBI taxdump files."""
+
+    configure_logging(verbose=verbose)
+    click.echo(build_taxonomy_db(taxdump, out))
+
+
 @app.command("build-profiles", help="Build HMM profiles from Pfam alignments.")
 @click.option(
     "--config",
@@ -233,6 +284,58 @@ def build_profiles_command(
     )
     click.echo(f"wrote {manifest.height} profiles to {out_dir}")
     click.echo(manifest_out)
+
+
+def _family_seed_path(analyte: Any, family: Any) -> Path:
+    family_seed = getattr(family, "anchor_seeds", None)
+    return Path(family_seed) if family_seed is not None else Path(analyte.anchor_seeds)
+
+
+@app.command("build-seed-databases", help="Build DIAMOND seed databases.")
+@click.option(
+    "--config",
+    default=Path("configs/headline.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="GasRegNet config directory or headline config.",
+)
+@click.option(
+    "--out",
+    default=Path("data/profiles/diamond_seeds"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Output directory for per-family .dmnd files.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def build_seed_databases_command(config: Path, out: Path, verbose: bool) -> None:
+    """Build one DIAMOND seed database per configured anchor family."""
+
+    configure_logging(verbose=verbose)
+    diamond = shutil.which("diamond")
+    if diamond is None:
+        raise click.ClickException("diamond binary was not found on PATH")
+    loaded = load_config(config)
+    out.mkdir(parents=True, exist_ok=True)
+    for analyte in loaded.analytes:
+        for family in analyte.anchor_families:
+            seed_path = _family_seed_path(analyte, family)
+            db_path = out / f"{analyte.analyte}__{family.name}.dmnd"
+            if not seed_path.exists():
+                raise click.ClickException(f"seed FASTA does not exist: {seed_path}")
+            subprocess.run(
+                [
+                    diamond,
+                    "makedb",
+                    "--in",
+                    str(seed_path),
+                    "--db",
+                    str(db_path),
+                ],
+                check=True,
+                capture_output=not verbose,
+                text=True,
+            )
+            click.echo(db_path)
 
 
 @app.command("index-refseq", help="Index RefSeq FASTA/GFF assets into DuckDB.")
@@ -295,16 +398,125 @@ def index_refseq_command(
     help="Repository root for relative manifest paths.",
 )
 @click.option("--verbose", is_flag=True, help="Enable debug logs.")
+@click.option(
+    "--taxonomy-db",
+    type=click.Path(path_type=Path),
+    help="Optional offline taxonomy DuckDB used to expand manifest taxon_id fields.",
+)
 def index_refseq_corpus_command(
     manifest: Path,
     root: Path,
+    taxonomy_db: Path | None,
     verbose: bool,
 ) -> None:
     """Index all RefSeq catalogs declared in a manifest."""
 
     configure_logging(verbose=verbose)
-    for output in index_refseq_corpus(manifest, root=root):
+    for output in index_refseq_corpus(manifest, root=root, taxonomy_db=taxonomy_db):
         click.echo(output)
+
+
+@app.command(
+    "index-refseq-corpus-store",
+    help="Index all RefSeq catalogs into a partitioned Parquet corpus store.",
+)
+@click.option(
+    "--manifest",
+    default=Path("configs/refseq_catalogs.yaml"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="RefSeq catalog YAML manifest with taxonomy blocks.",
+)
+@click.option(
+    "--root",
+    default=Path("."),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Repository root for relative manifest paths.",
+)
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+@click.option(
+    "--taxonomy-db",
+    type=click.Path(path_type=Path),
+    help="Optional offline taxonomy DuckDB used to expand manifest taxon_id fields.",
+)
+def index_refseq_corpus_store_command(
+    manifest: Path,
+    root: Path,
+    store: Path,
+    taxonomy_db: Path | None,
+    verbose: bool,
+) -> None:
+    """Index all RefSeq catalogs declared in a manifest into Parquet."""
+
+    configure_logging(verbose=verbose)
+    for output in index_refseq_corpus_store(
+        manifest,
+        root=root,
+        store_root=store,
+        taxonomy_db=taxonomy_db,
+    ):
+        click.echo(output)
+
+
+@app.command("enumerate-shards", help="Enumerate corpus-store workflow shards.")
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root containing datasets.parquet.",
+)
+@click.option(
+    "--strategy",
+    default="by_phylum",
+    show_default=True,
+    type=click.Choice(["by_phylum", "by_n_genomes"]),
+    help="Shard enumeration strategy.",
+)
+@click.option(
+    "--n-genomes-per-shard",
+    default=1000,
+    show_default=True,
+    type=int,
+    help="Maximum datasets per shard for by_n_genomes.",
+)
+@click.option(
+    "--max-shards",
+    type=int,
+    help="Optional cap on emitted shards for dry runs or probes.",
+)
+@click.option(
+    "--out",
+    type=click.Path(path_type=Path),
+    help="Shard manifest path. Defaults to STORE/shards.parquet.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def enumerate_shards_command(
+    store: Path,
+    strategy: str,
+    n_genomes_per_shard: int,
+    max_shards: int | None,
+    out: Path | None,
+    verbose: bool,
+) -> None:
+    """Enumerate deterministic corpus-store shards."""
+
+    configure_logging(verbose=verbose)
+    click.echo(
+        write_shards(
+            store,
+            out,
+            strategy,
+            n_genomes_per_shard=n_genomes_per_shard,
+            max_shards=max_shards,
+        ),
+    )
 
 
 @app.command("query-refseq", help="Search a DuckDB RefSeq reference catalog.")
@@ -423,6 +635,16 @@ def summarize_refseq_corpus_command(
     help="Repository root for relative manifest paths.",
 )
 @click.option(
+    "--store",
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root. Falls back to manifest DuckDBs.",
+)
+@click.option(
+    "--seed-diamond-dir",
+    type=click.Path(path_type=Path),
+    help="Optional DIAMOND seed database directory for store-backed rescue.",
+)
+@click.option(
     "--out",
     type=click.Path(path_type=Path),
     help="Optional CSV output path. Writes to stdout when omitted.",
@@ -518,6 +740,8 @@ def detect_anchors_command(
     bitscore_threshold: float | None,
     e_value_threshold: float,
     root: Path,
+    store: Path | None,
+    seed_diamond_dir: Path | None,
     out: Path,
     verbose: bool,
 ) -> None:
@@ -534,6 +758,8 @@ def detect_anchors_command(
             profile_dir=profile_dir,
             bitscore_threshold=bitscore_threshold,
             e_value_threshold=e_value_threshold,
+            store_root=store,
+            seeds_diamond_dir=seed_diamond_dir,
         )
     except NotImplementedError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -583,6 +809,16 @@ def detect_anchors_command(
     help="Repository root for relative manifest paths.",
 )
 @click.option(
+    "--store",
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root. Falls back to manifest DuckDBs.",
+)
+@click.option(
+    "--seed-diamond-dir",
+    type=click.Path(path_type=Path),
+    help="Optional DIAMOND seed database directory for store-backed rescue.",
+)
+@click.option(
     "--out",
     required=True,
     type=click.Path(path_type=Path),
@@ -596,6 +832,8 @@ def detect_anchors_profile_command(
     bitscore_threshold: float | None,
     e_value_threshold: float,
     root: Path,
+    store: Path | None,
+    seed_diamond_dir: Path | None,
     out: Path,
     verbose: bool,
 ) -> None:
@@ -611,6 +849,8 @@ def detect_anchors_profile_command(
         profile_dir=profile_dir,
         bitscore_threshold=bitscore_threshold,
         e_value_threshold=e_value_threshold,
+        store_root=store,
+        seeds_diamond_dir=seed_diamond_dir,
     )
     write_parquet(anchor_hits, out, AnchorHitsSchema)
     click.echo(out)
@@ -638,6 +878,11 @@ def detect_anchors_profile_command(
     help="Repository root for relative manifest paths.",
 )
 @click.option(
+    "--store",
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root. Falls back to manifest DuckDBs.",
+)
+@click.option(
     "--out",
     required=True,
     type=click.Path(path_type=Path),
@@ -654,6 +899,7 @@ def extract_neighborhoods_command(
     anchor_hits: Path,
     manifest: Path,
     root: Path,
+    store: Path | None,
     out: Path,
     window_genes: int,
     verbose: bool,
@@ -667,6 +913,133 @@ def extract_neighborhoods_command(
         manifest,
         root=root,
         window_genes=window_genes,
+        store_root=store,
+    )
+    write_parquet(loci, out / "intermediate" / "loci.parquet", LociSchema)
+    write_parquet(genes, out / "intermediate" / "genes.parquet", GenesSchema)
+    click.echo(out)
+
+
+def _datasets_for_shard(shards: Path, shard_id: str) -> list[str]:
+    for shard in read_shards(shards):
+        if shard.shard_id == shard_id:
+            return list(shard.dataset_names)
+    raise click.ClickException(f"unknown shard id: {shard_id}")
+
+
+@app.command("detect-anchors-shard", help="Detect anchor hits for one store shard.")
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root.",
+)
+@click.option(
+    "--shards",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Shard manifest Parquet from enumerate-shards.",
+)
+@click.option("--shard-id", required=True, help="Shard identifier to process.")
+@click.option(
+    "--config",
+    default=Path("configs"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="GasRegNet config directory or headline config.",
+)
+@click.option(
+    "--profile-dir",
+    default=Path("data/profiles"),
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Directory containing anchor-family HMM profiles.",
+)
+@click.option(
+    "--seed-diamond-dir",
+    type=click.Path(path_type=Path),
+    help="Optional DIAMOND seed database directory.",
+)
+@click.option("--e-value-threshold", default=1e-20, show_default=True, type=float)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet output path.",
+)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def detect_anchors_shard_command(
+    store: Path,
+    shards: Path,
+    shard_id: str,
+    config: Path,
+    profile_dir: Path,
+    seed_diamond_dir: Path | None,
+    e_value_threshold: float,
+    out: Path,
+    verbose: bool,
+) -> None:
+    """Detect anchors for one persisted shard."""
+
+    configure_logging(verbose=verbose)
+    dataset_names = _datasets_for_shard(shards, shard_id)
+    anchor_hits = detect_refseq_anchor_hits(
+        Path("unused.yaml"),
+        Path("unused.yaml"),
+        root=Path("."),
+        mode="profile",
+        config=config,
+        profile_dir=profile_dir,
+        e_value_threshold=e_value_threshold,
+        store_root=store,
+        dataset_names=dataset_names,
+        seeds_diamond_dir=seed_diamond_dir,
+    )
+    write_parquet(anchor_hits, out, AnchorHitsSchema)
+    click.echo(out)
+
+
+@app.command(
+    "extract-neighborhoods-shard",
+    help="Extract RefSeq neighborhoods for one store shard.",
+)
+@click.option(
+    "--anchor-hits",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Anchor hits Parquet for this shard.",
+)
+@click.option(
+    "--store",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Partitioned-Parquet corpus store root.",
+)
+@click.option(
+    "--out",
+    required=True,
+    type=click.Path(path_type=Path),
+    help="Output directory for loci.parquet and genes.parquet.",
+)
+@click.option("--window-genes", default=10, show_default=True, type=int)
+@click.option("--verbose", is_flag=True, help="Enable debug logs.")
+def extract_neighborhoods_shard_command(
+    anchor_hits: Path,
+    store: Path,
+    out: Path,
+    window_genes: int,
+    verbose: bool,
+) -> None:
+    """Extract canonical loci and genes from one store-backed shard."""
+
+    configure_logging(verbose=verbose)
+    hits = read_parquet(anchor_hits, AnchorHitsSchema)
+    loci, genes = extract_refseq_neighborhoods(
+        hits,
+        Path("unused.yaml"),
+        root=Path("."),
+        window_genes=window_genes,
+        store_root=store,
     )
     write_parquet(loci, out / "intermediate" / "loci.parquet", LociSchema)
     write_parquet(genes, out / "intermediate" / "genes.parquet", GenesSchema)

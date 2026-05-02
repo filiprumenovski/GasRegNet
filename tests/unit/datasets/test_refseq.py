@@ -85,6 +85,15 @@ catalogs:
     protein_faa: proteins.faa.gz
     gff: genome.gff.gz
     out_db: mini.duckdb
+    taxonomy:
+      taxon_id: 511145
+      superkingdom: Bacteria
+      phylum: Pseudomonadota
+      class: Gammaproteobacteria
+      order: Enterobacterales
+      family: Enterobacteriaceae
+      genus: Escherichia
+      species: Escherichia coli
 """,
         encoding="utf-8",
     )
@@ -143,6 +152,15 @@ catalogs:
     protein_faa: proteins.faa.gz
     gff: genome.gff.gz
     out_db: mini.duckdb
+    taxonomy:
+      taxon_id: 511145
+      superkingdom: Bacteria
+      phylum: Pseudomonadota
+      class: Gammaproteobacteria
+      order: Enterobacterales
+      family: Enterobacteriaceae
+      genus: Escherichia
+      species: Escherichia coli
 """,
         encoding="utf-8",
     )
@@ -209,6 +227,15 @@ catalogs:
     protein_faa: proteins.faa.gz
     gff: genome.gff.gz
     out_db: mini.duckdb
+    taxonomy:
+      taxon_id: 511145
+      superkingdom: Bacteria
+      phylum: Pseudomonadota
+      class: Gammaproteobacteria
+      order: Enterobacterales
+      family: Enterobacteriaceae
+      genus: Escherichia
+      species: Escherichia coli
 """,
         encoding="utf-8",
     )

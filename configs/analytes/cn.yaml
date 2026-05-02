@@ -1,20 +1,30 @@
 analyte: CN
-display_name: "cyanide-resistant respiration control"
+display_name: "cyanide handling and tolerance"
 anchor_seeds: data/seeds/cn_anchor_seeds.faa
 anchor_families:
-  - name: cydA
+  - name: cynD
+    pfam_required: ["PF00795"]
+    role: primary
+  - name: chy
+    pfam_required: ["PF00795"]
+    role: primary
+  - name: nit4
+    pfam_required: ["PF00795"]
+    role: primary
+  - name: rhdA
+    pfam_required: ["PF00581"]
+    role: primary
+  - name: cioA
     pfam_required: ["PF01654"]
-    role: primary
-  - name: cydB
+    role: contextual
+  - name: cioB
     pfam_required: ["PF02322"]
-    role: primary
-  - name: cydX
-    pfam_required: ["PF13456"]
-    role: accessory
+    role: contextual
 window_genes: 10
 known_organisms_table: data/references/known_cn_organisms.csv
 expected_sensory_chemistry:
-  - cysteine_metal
-  - flavin
   - heme
+  - iron_sulfur_4Fe4S
+  - redox_quinone
+  - cysteine_metal
 seed: 20260429

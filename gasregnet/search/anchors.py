@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
 import duckdb
 import polars as pl
 
 from gasregnet.config import AnalyteConfig, GasRegNetConfig, load_config
+from gasregnet.datasets.corpus_reader import CorpusStoreHandle, open_corpus_store
 from gasregnet.datasets.refseq import read_refseq_catalog_manifest
 from gasregnet.io.fasta import read_fasta
 from gasregnet.schemas import AnchorHitsSchema, validate
@@ -68,6 +70,17 @@ def _feature_metadata(db: Path, protein_accessions: list[str]) -> pl.DataFrame:
         ).pl()
 
 
+def _feature_metadata_store(
+    store: CorpusStoreHandle,
+    dataset_name: str,
+    protein_accessions: list[str],
+) -> pl.DataFrame:
+    return store.fetch_protein_metadata(
+        protein_accessions,
+        dataset_name=dataset_name,
+    ).drop("dataset_name")
+
+
 def _all_protein_metadata(db: Path) -> pl.DataFrame:
     with duckdb.connect(str(db), read_only=True) as connection:
         return connection.execute(
@@ -84,6 +97,13 @@ def _all_protein_metadata(db: Path) -> pl.DataFrame:
         ).pl()
 
 
+def _all_protein_metadata_store(
+    store: CorpusStoreHandle,
+    dataset_name: str,
+) -> pl.DataFrame:
+    return store.fetch_proteins_for_dataset(dataset_name).drop("dataset_name")
+
+
 def _gene_symbol(description: str) -> str:
     for token in description.split():
         if token.startswith("GN="):
@@ -92,7 +112,12 @@ def _gene_symbol(description: str) -> str:
 
 
 def _seed_for_family(analyte: AnalyteConfig, anchor_family: str) -> str:
-    records = list(read_fasta(analyte.anchor_seeds))
+    seed_path = analyte.anchor_seeds
+    for family in analyte.anchor_families:
+        if family.name == anchor_family and family.anchor_seeds is not None:
+            seed_path = family.anchor_seeds
+            break
+    records = list(read_fasta(seed_path))
     family_lower = anchor_family.lower()
     for _accession, description, sequence in records:
         if _gene_symbol(description).lower() == family_lower:
@@ -159,7 +184,12 @@ def _back_confirm(
 
 def _family_guard_terms(anchor_family: str) -> tuple[str, ...]:
     return {
-        "coxL": ("coxl", "carbon monoxide", "co dehydrogenase"),
+        "coxL": ("coxl", "molybdenum carbon monoxide dehydrogenase"),
+        "cooS": (
+            "coos",
+            "anaerobic carbon monoxide dehydrogenase",
+            "carbon monoxide dehydrogenase ni",
+        ),
         "coxM": ("coxm", "carbon monoxide", "co dehydrogenase"),
         "coxS": ("coxs", "carbon monoxide", "co dehydrogenase"),
         "cydA": ("cyda", "appc", "cytochrome bd"),
@@ -273,6 +303,91 @@ def _hits_for_family(
     return validate(frame, AnchorHitsSchema)
 
 
+def _hits_for_family_store(
+    *,
+    store: CorpusStoreHandle,
+    dataset_name: str,
+    protein_faa: Path,
+    analyte: str,
+    anchor_family: str,
+    profile_hmm: Path,
+    e_value_threshold: float,
+    bitscore_threshold: float | None,
+    seeds_by_analyte: dict[str, dict[str, str]],
+    back_confirm_identity: float,
+    back_confirm_coverage: float,
+) -> pl.DataFrame:
+    hits = hmmsearch(profile_hmm, protein_faa, e_value=e_value_threshold)
+    if hits.is_empty():
+        return _empty_anchor_hits()
+    hits = hits.filter(pl.col("evalue") <= e_value_threshold)
+    if bitscore_threshold is not None:
+        hits = hits.filter(pl.col("score") >= bitscore_threshold)
+    if hits.is_empty():
+        return _empty_anchor_hits()
+
+    metadata = _feature_metadata_store(
+        store,
+        dataset_name,
+        hits["target_id"].unique().to_list(),
+    )
+    frame = (
+        hits.join(
+            metadata,
+            left_on="target_id",
+            right_on="protein_accession",
+            how="left",
+        )
+        .with_columns(
+            [
+                pl.lit(dataset_name).alias("dataset_name"),
+                pl.lit(analyte).alias("analyte"),
+                pl.lit(anchor_family).alias("anchor_family"),
+                pl.col("target_id").alias("protein_accession"),
+                pl.col("locus_tag").fill_null("").alias("locus_tag"),
+                pl.col("gene").fill_null("").alias("gene"),
+                pl.col("product").fill_null("").alias("product"),
+                pl.col("score").alias("bitscore"),
+                pl.col("evalue").alias("e_value"),
+            ],
+        )
+        .filter(_family_guard_expression(anchor_family))
+        .with_columns(
+            pl.struct(["sequence"])
+            .map_elements(
+                lambda row: _back_confirm(
+                    sequence=row["sequence"],
+                    analyte=analyte,
+                    anchor_family=anchor_family,
+                    seeds_by_analyte=seeds_by_analyte,
+                    identity_threshold=back_confirm_identity,
+                    coverage_threshold=back_confirm_coverage,
+                ),
+                return_dtype=pl.Struct(
+                    {
+                        "evidence_type": pl.Utf8,
+                        "identity": pl.Float64,
+                        "coverage": pl.Float64,
+                    },
+                ),
+            )
+            .alias("back_confirmation"),
+        )
+        .unnest("back_confirmation")
+        .select(list(ANCHOR_HITS_SCHEMA))
+        .unique(
+            subset=[
+                "dataset_name",
+                "analyte",
+                "anchor_family",
+                "protein_accession",
+                "locus_tag",
+            ],
+        )
+    )
+    return validate(frame, AnchorHitsSchema)
+
+
 def _seed_rescue_hits(
     *,
     dataset_name: str,
@@ -318,6 +433,51 @@ def _seed_rescue_hits(
     )
 
 
+def _seed_rescue_hits_store(
+    *,
+    store: CorpusStoreHandle,
+    dataset_name: str,
+    analyte: str,
+    anchor_family: str,
+    seeds_by_analyte: dict[str, dict[str, str]],
+    identity_threshold: float,
+    coverage_threshold: float,
+) -> pl.DataFrame:
+    metadata = _all_protein_metadata_store(store, dataset_name)
+    if metadata.is_empty():
+        return _empty_anchor_hits()
+    rows: list[dict[str, object]] = []
+    seed = seeds_by_analyte.get(analyte, {}).get(anchor_family, "")
+    for protein in metadata.iter_rows(named=True):
+        identity, coverage = _sequence_match(str(protein["sequence"]), seed)
+        if identity < identity_threshold or coverage < coverage_threshold:
+            continue
+        if not _passes_family_guard(protein, anchor_family):
+            continue
+        rows.append(
+            {
+                "dataset_name": dataset_name,
+                "analyte": analyte,
+                "anchor_family": anchor_family,
+                "protein_accession": str(protein["protein_accession"]),
+                "locus_tag": str(protein["locus_tag"]),
+                "gene": str(protein["gene"]),
+                "product": str(protein["product"]),
+                "bitscore": None,
+                "e_value": None,
+                "identity": identity,
+                "coverage": coverage,
+                "evidence_type": "seed_back_confirmed",
+            },
+        )
+    if not rows:
+        return _empty_anchor_hits()
+    return validate(
+        pl.DataFrame(rows, schema_overrides=ANCHOR_HITS_SCHEMA),
+        AnchorHitsSchema,
+    )
+
+
 def detect_anchors_profile(
     manifest: Path,
     *,
@@ -328,13 +488,101 @@ def detect_anchors_profile(
     e_value_threshold: float = 1e-20,
     back_confirm_identity: float = 0.25,
     back_confirm_coverage: float = 0.5,
+    store_root: Path | None = None,
+    dataset_names: list[str] | None = None,
+    seeds_diamond_dir: Path | None = None,
 ) -> pl.DataFrame:
     """Run HMM profile anchor detection against RefSeq catalog protein FASTAs."""
 
-    catalogs = read_refseq_catalog_manifest(manifest, root=root)
     loaded_config = load_config(config) if isinstance(config, Path) else config
     seeds_by_analyte = _seed_sequences(loaded_config)
     frames: list[pl.DataFrame] = []
+    if store_root is not None:
+        with open_corpus_store(store_root) as store:
+            with TemporaryDirectory() as temp_dir:
+                temp_root = Path(temp_dir)
+                for row in store.datasets().iter_rows(named=True):
+                    dataset_name = str(row["dataset_name"])
+                    if dataset_names is not None and dataset_name not in dataset_names:
+                        continue
+                    protein_faa = store.write_dataset_fasta(
+                        dataset_name,
+                        temp_root / f"{dataset_name}.faa",
+                    )
+                    for analyte in loaded_config.analytes:
+                        for family in analyte.anchor_families:
+                            profile_hmm = _profile_path(profile_dir, family.name)
+                            if not profile_hmm.exists():
+                                continue
+                            family_hits = _hits_for_family_store(
+                                store=store,
+                                dataset_name=dataset_name,
+                                protein_faa=protein_faa,
+                                analyte=analyte.analyte,
+                                anchor_family=family.name,
+                                profile_hmm=profile_hmm,
+                                e_value_threshold=e_value_threshold,
+                                bitscore_threshold=bitscore_threshold,
+                                seeds_by_analyte=seeds_by_analyte,
+                                back_confirm_identity=back_confirm_identity,
+                                back_confirm_coverage=back_confirm_coverage,
+                            )
+                            if not family_hits.is_empty():
+                                frames.append(family_hits)
+                            rescue_hits = _seed_rescue_hits_store(
+                                store=store,
+                                dataset_name=dataset_name,
+                                analyte=analyte.analyte,
+                                anchor_family=family.name,
+                                seeds_by_analyte=seeds_by_analyte,
+                                identity_threshold=0.95,
+                                coverage_threshold=0.95,
+                            )
+                            if not rescue_hits.is_empty():
+                                frames.append(rescue_hits)
+                if seeds_diamond_dir is not None:
+                    from gasregnet.datasets.sharding import Shard
+                    from gasregnet.search.seed_rescue import seed_rescue_for_shard
+
+                    datasets = (
+                        tuple(dataset_names)
+                        if dataset_names is not None
+                        else tuple(
+                            str(row["dataset_name"])
+                            for row in store.datasets().iter_rows(named=True)
+                        )
+                    )
+                    if datasets:
+                        rescue = seed_rescue_for_shard(
+                            shard=Shard(
+                                shard_id="inline",
+                                strategy="inline",
+                                phylum="",
+                                dataset_names=datasets,
+                                n_proteins_estimate=0,
+                            ),
+                            store=store,
+                            seeds_diamond_dir=seeds_diamond_dir,
+                            analytes=loaded_config.analytes,
+                        )
+                        if not rescue.is_empty():
+                            frames.append(rescue)
+        if not frames:
+            return _empty_anchor_hits()
+        return validate(
+            pl.concat(frames, how="vertical").unique(
+                subset=[
+                    "dataset_name",
+                    "analyte",
+                    "anchor_family",
+                    "protein_accession",
+                    "locus_tag",
+                ],
+            ),
+            AnchorHitsSchema,
+        )
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
     for catalog in catalogs.iter_rows(named=True):
         dataset_name = str(catalog["dataset_name"])
         db = Path(str(catalog["out_db"]))
@@ -342,6 +590,8 @@ def detect_anchors_profile(
         for analyte in loaded_config.analytes:
             for family in analyte.anchor_families:
                 profile_hmm = _profile_path(profile_dir, family.name)
+                if not profile_hmm.exists():
+                    continue
                 family_hits = _hits_for_family(
                     dataset_name=dataset_name,
                     db=db,

@@ -1,0 +1,19 @@
+analyte: cyd_control
+display_name: "cytochrome bd respiratory control"
+anchor_seeds: data/seeds/cn_cyd_control_seeds.faa
+anchor_families:
+  - name: cydA
+    pfam_required: ["PF01654"]
+    role: primary
+  - name: cydB
+    pfam_required: ["PF02322"]
+    role: primary
+  - name: cydX
+    pfam_required: ["PF13456"]
+    role: accessory
+window_genes: 10
+known_organisms_table: data/references/known_cn_organisms.csv
+expected_sensory_chemistry:
+  - heme
+  - redox_quinone
+seed: 20260429

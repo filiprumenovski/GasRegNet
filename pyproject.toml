@@ -70,6 +70,9 @@ packages = ["gasregnet"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "scaling: opt-in scaling acceptance probes"
+]
 
 [tool.coverage.run]
 source = ["gasregnet"]

@@ -63,6 +63,7 @@ LOCI_SCHEMA: dict[str, Any] = {
     "taxonomic_context_score": pl.Float64,
     "operon_integrity_score": pl.Float64,
     "created_at": pl.Datetime("us"),
+    "provenance_source": pl.Utf8,
 }
 GENES_SCHEMA: dict[str, Any] = {
     "locus_id": pl.Utf8,
@@ -206,6 +207,7 @@ def _build_loci(neighborhoods: list[dict[str, Any]], analyte: str) -> pl.DataFra
             "taxonomic_context_score": 0.0,
             "operon_integrity_score": 0.0,
             "created_at": now,
+            "provenance_source": "efi_sqlite",
         }
         for row in neighborhoods
     ]

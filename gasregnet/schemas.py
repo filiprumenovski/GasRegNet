@@ -11,7 +11,7 @@ from gasregnet.errors import SchemaError
 
 DataFrameSchema = Any
 
-ANALYTES = ["CO", "NO", "CN", "O2"]
+ANALYTES = ["CO", "NO", "CN", "O2", "cyd_control"]
 LOCUS_CONFIDENCE = ["high", "medium", "low", "control"]
 FUNCTIONAL_CLASSES = ["anchor", "regulator", "metabolic", "transporter", "unknown"]
 REGULATOR_CLASSES = [
@@ -86,11 +86,19 @@ LociSchema = _schema(
         "taxonomic_context_score": _column(pl.Float64),
         "operon_integrity_score": _column(pl.Float64),
         "created_at": _column(pl.Datetime("us")),
+        "provenance_source": _column(
+            pl.Utf8,
+            checks=pa.Check.isin(["efi_sqlite", "refseq", "synthetic"]),
+            required=False,
+        ),
+        "corpus_store_root": _column(pl.Utf8, required=False),
+        "superkingdom": _column(pl.Utf8, required=False),
         "phylum": _column(pl.Utf8, required=False),
         "class": _column(pl.Utf8, required=False),
         "order": _column(pl.Utf8, required=False),
         "family": _column(pl.Utf8, required=False),
         "genus": _column(pl.Utf8, required=False),
+        "species": _column(pl.Utf8, required=False),
         "conservation_across_taxa_score": _column(pl.Float64, required=False),
     },
 )
@@ -317,4 +325,30 @@ def validate(df: pl.DataFrame, schema: DataFrameSchema) -> pl.DataFrame:
         )
         if invalid_anchor_rows.height > 0:
             raise SchemaError("relative_index == 0 requires is_anchor == True")
+    if schema is LociSchema and "provenance_source" in validated.columns:
+        refseq_rows = validated.filter(pl.col("provenance_source") == "refseq")
+        if not refseq_rows.is_empty():
+            if refseq_rows.filter(pl.col("taxon_id") <= 0).height > 0:
+                raise SchemaError("refseq loci require non-zero taxon_id")
+            required_taxonomy = ["phylum", "class", "order", "family", "genus"]
+            missing_columns = [
+                column
+                for column in required_taxonomy
+                if column not in refseq_rows.columns
+            ]
+            if missing_columns:
+                raise SchemaError(
+                    "refseq loci require taxonomy column(s): "
+                    + ", ".join(missing_columns),
+                )
+            null_predicate = pl.any_horizontal(
+                [
+                    pl.col(column).is_null() | (pl.col(column).cast(pl.Utf8) == "")
+                    for column in required_taxonomy
+                ],
+            )
+            if refseq_rows.filter(null_predicate).height > 0:
+                raise SchemaError(
+                    "refseq loci require non-null phylum/class/order/family/genus",
+                )
     return validated

@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
+
 from gasregnet.assets import fetch_assets
 
 
@@ -66,3 +68,57 @@ assets:
 
     assert written == [tmp_path / "data" / "external" / "archive.gz"]
     assert written[0].read_bytes() == payload
+
+
+def test_fetch_assets_fails_on_sha256_mismatch(tmp_path: Path) -> None:
+    source = tmp_path / "seed.faa"
+    source.write_text(">seed\nMA\n", encoding="utf-8")
+    manifest = tmp_path / "assets.yaml"
+    manifest.write_text(
+        f"""
+assets:
+  - name: bad-seed
+    output: data/seeds/bad.faa
+    sha256: '{"0" * 64}'
+    urls:
+      - {source.as_uri()}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="bad-seed hash mismatch"):
+        fetch_assets(
+            manifest,
+            root=tmp_path,
+            downloader="urllib",
+            force=True,
+        )
+
+
+def test_fetch_assets_fails_on_existing_file_sha256_mismatch(tmp_path: Path) -> None:
+    source = tmp_path / "source.faa"
+    source.write_text(">seed\nMA\n", encoding="utf-8")
+    expected = hashlib.sha256(source.read_bytes()).hexdigest()
+    output = tmp_path / "data" / "seeds" / "seed.faa"
+    output.parent.mkdir(parents=True)
+    output.write_text(">corrupt\nXX\n", encoding="utf-8")
+    manifest = tmp_path / "assets.yaml"
+    manifest.write_text(
+        f"""
+assets:
+  - name: cached-seed
+    output: data/seeds/seed.faa
+    sha256: {expected}
+    urls:
+      - {source.as_uri()}
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="cached-seed hash mismatch"):
+        fetch_assets(
+            manifest,
+            root=tmp_path,
+            downloader="urllib",
+            force=False,
+        )

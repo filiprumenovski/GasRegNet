@@ -1,1 +1,7 @@
 organism,taxon_id,evidence,pmid,notes
+Pseudomonas stutzeri AK61,316,cynD cyanidase hydrolyzes cyanide to formate and ammonia,9720205,Primary bacterial cyanide dihydratase/cyanidase benchmark organism
+Bacillus pumilus C1,1408,cynD cyanide dihydratase degrades cyanide to formate and ammonia,8407782|12902273,Cloned and biochemically characterized cyanide dihydratase
+Fusarium lateritium,5507,cyanide-inducible chy1 cyanide hydratase converts cyanide to formamide,8409923,Fungal cyanide hydratase benchmark organism
+Fusarium solani,169388,chy expression induced by free and metal-complexed cyanide,12000318,Fungal cyanide hydratase benchmark organism
+Pseudomonas aeruginosa PAO1,208964,rhdA thiosulfate:cyanide sulfurtransferase protects from cyanide toxicity,15522204|17098912|18685272,Endogenous cyanide producer with sulfurtransferase detoxification and CIO tolerance literature
+Pseudomonas pseudoalcaligenes CECT 5344,1182590,cioAB cyanide-insensitive oxidase and nit4 support cyanide resistance and assimilation,17574992|28235872,Alkaliphilic cyanotroph; current taxonomy in UniProt is Ectopseudomonas oleovorans CECT 5344

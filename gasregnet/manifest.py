@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from gasregnet import __version__
+from gasregnet.check_tools import read_tools_resolved
 from gasregnet.hashing import file_sha256, text_sha256
 
 
@@ -23,12 +24,23 @@ class RunManifest:
     python_version: str = field(default_factory=platform.python_version)
     config_hashes: dict[str, str] = field(default_factory=dict)
     input_hashes: dict[str, str] = field(default_factory=dict)
-    external_versions: dict[str, str] = field(default_factory=dict)
+    external_versions: dict[str, Any] = field(default_factory=dict)
     wall_clock_seconds: float | None = None
 
 
 def _hash_paths(paths: dict[str, Path]) -> dict[str, str]:
-    return {name: file_sha256(path) for name, path in sorted(paths.items())}
+    hashes: dict[str, str] = {}
+    for name, path in sorted(paths.items()):
+        if path.is_dir():
+            children = sorted(
+                candidate for candidate in path.rglob("*") if candidate.is_file()
+            )
+            for child in children:
+                relative = child.relative_to(path).as_posix()
+                hashes[f"{name}/{relative}"] = file_sha256(child)
+            continue
+        hashes[name] = file_sha256(path)
+    return hashes
 
 
 def build_manifest(
@@ -37,14 +49,18 @@ def build_manifest(
     command: str,
     config_paths: dict[str, Path] | None = None,
     input_paths: dict[str, Path] | None = None,
-    external_versions: dict[str, str] | None = None,
+    external_versions: dict[str, Any] | None = None,
+    tools_resolved: Path | None = None,
     wall_clock_seconds: float | None = None,
 ) -> RunManifest:
     """Build a run manifest with deterministic input/config hashes."""
 
+    versions: dict[str, Any] = dict(sorted((external_versions or {}).items()))
+    if tools_resolved is not None:
+        versions.update(read_tools_resolved(tools_resolved))
+        input_paths = {**(input_paths or {}), "tools_resolved": tools_resolved}
     config_hashes = _hash_paths(config_paths or {})
     input_hashes = _hash_paths(input_paths or {})
-    versions = dict(sorted((external_versions or {}).items()))
     run_hash = text_sha256(
         json.dumps(
             {

@@ -6,4 +6,11 @@ profile_dir: data/profiles
 e_value_threshold: 1e-20
 benchmark: data/benchmarks/regulators_v2.csv
 window_genes: 10
+store: data/corpus_store
+sharding:
+  strategy: by_phylum
+  n_genomes_per_shard: 1000
+  max_shards: null
+  shards:
+    - all
 seed: 20260429

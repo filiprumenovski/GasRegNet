@@ -44,21 +44,29 @@ def _gene_symbol(description: str) -> str:
     return match.group(1) if match else ""
 
 
+def _seed_path(analyte: AnalyteConfig, anchor_family: str) -> Path:
+    for family in analyte.anchor_families:
+        if family.name == anchor_family and family.anchor_seeds is not None:
+            return family.anchor_seeds
+    return analyte.anchor_seeds
+
+
 def _select_seed(
     analyte: AnalyteConfig,
     anchor_family: str,
-) -> tuple[str, str, str, str]:
-    records = list(read_fasta(analyte.anchor_seeds))
+) -> tuple[str, str, str, str, Path]:
+    seed_path = _seed_path(analyte, anchor_family)
+    records = list(read_fasta(seed_path))
     family_lower = anchor_family.lower()
     for accession, description, sequence in records:
         if _gene_symbol(description).lower() == family_lower:
-            return accession, description, sequence, "gene_symbol"
+            return accession, description, sequence, "gene_symbol", seed_path
     for accession, description, sequence in records:
         searchable = f"{accession} {description}".lower()
         if family_lower in searchable:
-            return accession, description, sequence, "description_match"
+            return accession, description, sequence, "description_match", seed_path
     accession, description, sequence = records[0]
-    return accession, description, sequence, "analyte_seed_fallback"
+    return accession, description, sequence, "analyte_seed_fallback", seed_path
 
 
 def _build_single_sequence_hmm(
@@ -190,7 +198,7 @@ def build_profiles(
     for analyte in loaded.analytes:
         for family in analyte.anchor_families:
             pfam_id = family.pfam_required[0]
-            accession, _description, sequence, selection_rule = _select_seed(
+            accession, _description, sequence, selection_rule, seed_path = _select_seed(
                 analyte,
                 family.name,
             )
@@ -224,7 +232,7 @@ def build_profiles(
                     "anchor_family": family.name,
                     "pfam_id": pfam_id,
                     "profile": str(out_hmm),
-                    "seed_faa": str(analyte.anchor_seeds),
+                    "seed_faa": str(seed_path),
                     "seed_accession": accession,
                     "selection_rule": selection_rule,
                     "alignment": alignment,

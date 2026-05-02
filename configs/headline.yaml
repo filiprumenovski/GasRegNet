@@ -2,6 +2,7 @@ analytes:
   - configs/analytes/co.yaml
   - configs/analytes/no.yaml
   - configs/analytes/cn.yaml
+  - configs/analytes/cyd_control.yaml
   - configs/analytes/o2.yaml
 regulator_families: configs/regulator_families.yaml
 sensory_domains: configs/sensory_domains.yaml

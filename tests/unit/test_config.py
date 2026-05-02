@@ -17,12 +17,14 @@ from gasregnet.errors import ConfigError
 
 def test_load_config_from_directory() -> None:
     config = load_config(Path("configs"))
+    co_config = config.analytes[0]
 
     assert isinstance(config, GasRegNetConfig)
     assert [analyte.analyte for analyte in config.analytes] == [
         "CO",
         "NO",
         "CN",
+        "cyd_control",
         "O2",
     ]
     assert config.seed == 20260429
@@ -38,14 +40,29 @@ def test_load_config_from_directory() -> None:
     assert "sigma54_activator" in {
         entry.regulator_class for entry in config.regulator_families
     }
-    assert config.analytes[0].expected_sensory_chemistry == [
+    assert co_config.expected_sensory_chemistry == [
         "heme",
         "iron_sulfur_4Fe4S",
     ]
+    co_anchor_families = {
+        family.name: (family.role, family.pfam_required, family.anchor_seeds)
+        for family in co_config.anchor_families
+    }
+    assert co_anchor_families["coxL"] == (
+        "primary",
+        ["PF02738"],
+        Path("data/seeds/co_coxL_anchor_seeds.faa"),
+    )
+    assert co_anchor_families["cooS"] == (
+        "primary",
+        ["PF03063"],
+        Path("data/seeds/co_cooS_anchor_seeds.faa"),
+    )
     assert config.analytes[2].expected_sensory_chemistry == [
-        "cysteine_metal",
-        "flavin",
         "heme",
+        "iron_sulfur_4Fe4S",
+        "redox_quinone",
+        "cysteine_metal",
     ]
 
 

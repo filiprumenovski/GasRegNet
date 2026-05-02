@@ -45,6 +45,14 @@ CATALOG_SCHEMA = {
     "protein_faa": pl.Utf8,
     "gff": pl.Utf8,
     "out_db": pl.Utf8,
+    "taxon_id": pl.Utf8,
+    "superkingdom": pl.Utf8,
+    "phylum": pl.Utf8,
+    "class": pl.Utf8,
+    "order": pl.Utf8,
+    "family": pl.Utf8,
+    "genus": pl.Utf8,
+    "species": pl.Utf8,
 }
 SCAN_TARGET_SCHEMA = {
     "analyte": pl.Utf8,
@@ -96,6 +104,15 @@ LOCI_OUTPUT_SCHEMA: dict[str, Any] = {
     "taxonomic_context_score": pl.Float64,
     "operon_integrity_score": pl.Float64,
     "created_at": pl.Datetime("us"),
+    "provenance_source": pl.Utf8,
+    "corpus_store_root": pl.Utf8,
+    "superkingdom": pl.Utf8,
+    "phylum": pl.Utf8,
+    "class": pl.Utf8,
+    "order": pl.Utf8,
+    "family": pl.Utf8,
+    "genus": pl.Utf8,
+    "species": pl.Utf8,
 }
 GENES_OUTPUT_SCHEMA: dict[str, Any] = {
     "locus_id": pl.Utf8,
@@ -178,6 +195,7 @@ def _metadata_frame(
     gff: Path,
     proteins: pl.DataFrame,
     features: pl.DataFrame,
+    taxonomy: dict[str, str | int] | None = None,
 ) -> pl.DataFrame:
     rows = [
         {"key": "dataset_name", "value": dataset_name},
@@ -190,7 +208,29 @@ def _metadata_frame(
             "value": datetime.now(UTC).isoformat(timespec="seconds"),
         },
     ]
+    for key, value in _normalize_taxonomy(taxonomy).items():
+        rows.append({"key": f"taxonomy.{key}", "value": str(value)})
     return pl.DataFrame(rows, schema=METADATA_SCHEMA)
+
+
+def _normalize_taxonomy(
+    taxonomy: dict[str, str | int] | None,
+) -> dict[str, str | int]:
+    values: dict[str, str | int] = {
+        "taxon_id": 0,
+        "superkingdom": "",
+        "phylum": "",
+        "class": "",
+        "order": "",
+        "family": "",
+        "genus": "",
+        "species": "",
+    }
+    if taxonomy:
+        for key in values:
+            if key in taxonomy and taxonomy[key] is not None:
+                values[key] = taxonomy[key]
+    return values
 
 
 def index_refseq_dataset(
@@ -199,6 +239,7 @@ def index_refseq_dataset(
     gff: Path,
     out_db: Path,
     dataset_name: str,
+    taxonomy: dict[str, str | int] | None = None,
 ) -> Path:
     """Index RefSeq protein and annotation assets into a DuckDB database."""
 
@@ -210,6 +251,7 @@ def index_refseq_dataset(
         gff=gff,
         proteins=proteins,
         features=features,
+        taxonomy=taxonomy,
     )
 
     out_db.parent.mkdir(parents=True, exist_ok=True)
@@ -260,6 +302,16 @@ def read_refseq_catalog_manifest(manifest: Path, *, root: Path) -> pl.DataFrame:
                 "protein_faa": str(root / protein_faa),
                 "gff": str(root / gff),
                 "out_db": str(root / out_db),
+                "taxon_id": str((raw.get("taxonomy") or {}).get("taxon_id", "")),
+                "superkingdom": str(
+                    (raw.get("taxonomy") or {}).get("superkingdom", ""),
+                ),
+                "phylum": str((raw.get("taxonomy") or {}).get("phylum", "")),
+                "class": str((raw.get("taxonomy") or {}).get("class", "")),
+                "order": str((raw.get("taxonomy") or {}).get("order", "")),
+                "family": str((raw.get("taxonomy") or {}).get("family", "")),
+                "genus": str((raw.get("taxonomy") or {}).get("genus", "")),
+                "species": str((raw.get("taxonomy") or {}).get("species", "")),
             },
         )
     return pl.DataFrame(rows, schema=CATALOG_SCHEMA)
@@ -287,18 +339,125 @@ def read_refseq_scan_config(path: Path) -> pl.DataFrame:
     return pl.DataFrame(rows, schema=SCAN_TARGET_SCHEMA)
 
 
-def index_refseq_corpus(manifest: Path, *, root: Path) -> list[Path]:
+def _taxonomy_from_catalog_row(
+    row: dict[str, object],
+    *,
+    taxonomy_db: Path | None = None,
+) -> dict[str, str | int]:
+    taxonomy: dict[str, str | int] = {}
+    for key in (
+        "taxon_id",
+        "superkingdom",
+        "phylum",
+        "class",
+        "order",
+        "family",
+        "genus",
+        "species",
+    ):
+        value = str(row[key])
+        if value:
+            taxonomy[key] = int(value) if key == "taxon_id" else value
+    taxon_id = int(str(taxonomy.get("taxon_id", "0") or "0"))
+    if taxonomy_db is not None and taxon_id > 0:
+        from gasregnet.annotation.ncbi_taxonomy import lookup_lineage
+
+        resolved = lookup_lineage(taxonomy_db, taxon_id)
+        taxonomy.update(
+            {
+                key: value
+                for key, value in resolved.items()
+                if key in {
+                    "superkingdom",
+                    "phylum",
+                    "class",
+                    "order",
+                    "family",
+                    "genus",
+                    "species",
+                }
+            },
+        )
+    return taxonomy
+
+
+def index_refseq_corpus(
+    manifest: Path,
+    *,
+    root: Path,
+    taxonomy_db: Path | None = None,
+) -> list[Path]:
     """Index every RefSeq catalog declared in a corpus manifest."""
 
     catalogs = read_refseq_catalog_manifest(manifest, root=root)
     outputs: list[Path] = []
     for row in catalogs.iter_rows(named=True):
+        taxonomy = _taxonomy_from_catalog_row(row, taxonomy_db=taxonomy_db)
         outputs.append(
             index_refseq_dataset(
                 protein_faa=Path(str(row["protein_faa"])),
                 gff=Path(str(row["gff"])),
                 out_db=Path(str(row["out_db"])),
                 dataset_name=str(row["dataset_name"]),
+                taxonomy=taxonomy or None,
+            ),
+        )
+    return outputs
+
+
+def index_refseq_dataset_store(
+    *,
+    protein_faa: Path,
+    gff: Path,
+    store_root: Path,
+    dataset_name: str,
+    taxonomy: dict[str, str | int],
+) -> Path:
+    """Index RefSeq protein and annotation assets into a Parquet corpus store."""
+
+    from gasregnet.datasets.corpus_store import write_catalog
+
+    proteins = _proteins_frame(protein_faa)
+    features = _features_frame(gff)
+    return write_catalog(
+        store_root=store_root,
+        dataset_name=dataset_name,
+        proteins=proteins,
+        features=features,
+        taxonomy=taxonomy,
+        metadata={
+            "protein_faa": protein_faa,
+            "gff": gff,
+            "n_proteins": proteins.height,
+            "n_features": features.height,
+        },
+    )
+
+
+def index_refseq_corpus_store(
+    manifest: Path,
+    *,
+    root: Path,
+    store_root: Path,
+    taxonomy_db: Path | None = None,
+) -> list[Path]:
+    """Index every RefSeq catalog declared in a manifest into a corpus store."""
+
+    catalogs = read_refseq_catalog_manifest(manifest, root=root)
+    outputs: list[Path] = []
+    for row in catalogs.iter_rows(named=True):
+        taxonomy = _taxonomy_from_catalog_row(row, taxonomy_db=taxonomy_db)
+        if not taxonomy:
+            raise ValueError(
+                f"catalog {row['dataset_name']} requires taxonomy for corpus store",
+            )
+        outputs.append(
+            index_refseq_dataset_store(
+                protein_faa=Path(str(row["protein_faa"])),
+                gff=Path(str(row["gff"])),
+                store_root=store_root,
+                dataset_name=str(row["dataset_name"]),
+                taxonomy=taxonomy,
             ),
         )
     return outputs
@@ -307,6 +466,19 @@ def index_refseq_corpus(manifest: Path, *, root: Path) -> list[Path]:
 def _metadata_map(connection: duckdb.DuckDBPyConnection) -> dict[str, str]:
     rows = connection.execute("select key, value from metadata").fetchall()
     return {str(key): str(value) for key, value in rows}
+
+
+def _taxonomy_metadata(connection: duckdb.DuckDBPyConnection) -> dict[str, str | int]:
+    metadata = _metadata_map(connection)
+    taxonomy = _normalize_taxonomy(
+        {
+            key.removeprefix("taxonomy."): value
+            for key, value in metadata.items()
+            if key.startswith("taxonomy.")
+        },
+    )
+    taxonomy["taxon_id"] = int(str(taxonomy["taxon_id"] or 0))
+    return taxonomy
 
 
 def _scalar(connection: duckdb.DuckDBPyConnection, query: str) -> Any:
@@ -571,6 +743,9 @@ def detect_refseq_anchor_hits(
     profile_dir: Path = Path("data/profiles"),
     bitscore_threshold: float | None = None,
     e_value_threshold: float = 1e-20,
+    store_root: Path | None = None,
+    dataset_names: list[str] | None = None,
+    seeds_diamond_dir: Path | None = None,
 ) -> pl.DataFrame:
     """Detect RefSeq anchors, using term scanning as the implemented smoke mode."""
 
@@ -588,6 +763,9 @@ def detect_refseq_anchor_hits(
             profile_dir=profile_dir,
             bitscore_threshold=bitscore_threshold,
             e_value_threshold=e_value_threshold,
+            store_root=store_root,
+            dataset_names=dataset_names,
+            seeds_diamond_dir=seeds_diamond_dir,
         )
     if mode != "smoke":
         msg = (
@@ -898,6 +1076,7 @@ def extract_refseq_neighborhoods(
     *,
     root: Path,
     window_genes: int = 10,
+    store_root: Path | None = None,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Extract ±N CDS neighborhoods around RefSeq anchor hits."""
 
@@ -905,7 +1084,6 @@ def extract_refseq_neighborhoods(
     if anchor_hits.is_empty():
         return _empty_loci_genes()
 
-    catalogs = _catalog_paths(read_refseq_catalog_manifest(manifest, root=root))
     loci_rows: list[dict[str, object]] = []
     gene_rows: list[dict[str, object]] = []
     created_at = datetime.now(UTC).replace(tzinfo=None)
@@ -917,112 +1095,75 @@ def extract_refseq_neighborhoods(
         dataset_name = str(anchor_record["dataset_name"])
         anchors_by_dataset.setdefault(dataset_name, []).append(anchor_record)
 
-    for dataset_name, anchors in anchors_by_dataset.items():
-        db = catalogs.get(dataset_name)
-        if db is None:
-            raise ValueError(f"no RefSeq catalog for dataset: {dataset_name}")
-        with duckdb.connect(str(db), read_only=True) as connection:
-            anchor_features = _anchor_feature_rows(connection, anchors)
-            missing = [
-                anchor
-                for index, anchor in enumerate(anchors)
-                if index not in anchor_features
-            ]
-            if missing:
-                raise ValueError(f"anchor feature not found: {missing[0]}")
+    if store_root is not None:
+        from gasregnet.datasets.corpus_reader import open_corpus_store
 
-            seqids = sorted(
-                {str(feature["seqid"]) for feature in anchor_features.values()},
-            )
-            cds = _read_cds_features_for_seqids(connection, seqids)
-
-        cds_by_seqid: dict[str, list[dict[str, object]]] = {
-            seqid: [] for seqid in seqids
-        }
-        for feature in cds.iter_rows(named=True):
-            cds_by_seqid.setdefault(str(feature["seqid"]), []).append(dict(feature))
-
-        for anchor_index_in_dataset, anchor in enumerate(anchors):
-            anchor_feature = anchor_features[anchor_index_in_dataset]
-            anchor_key = _feature_key(anchor_feature)
-            cds_rows = cds_by_seqid.get(str(anchor_feature["seqid"]), [])
-            anchor_index = None
-            for index, feature in enumerate(cds_rows):
-                if _feature_key(feature) == anchor_key:
-                    anchor_index = index
-                    break
-            if anchor_index is None:
-                raise ValueError(
-                    f"anchor feature not found in contig CDS order: {anchor}",
+        with open_corpus_store(store_root) as store:
+            for dataset_name, anchors in anchors_by_dataset.items():
+                taxonomy = store.dataset_taxonomy(dataset_name)
+                anchor_features = store.fetch_anchor_feature_rows(
+                    dataset_name=dataset_name,
+                    anchors=anchors,
                 )
+                missing = [
+                    anchor
+                    for index, anchor in enumerate(anchors)
+                    if index not in anchor_features
+                ]
+                if missing:
+                    raise ValueError(f"anchor feature not found: {missing[0]}")
+                seqids = sorted(
+                    {str(feature["seqid"]) for feature in anchor_features.values()},
+                )
+                cds = store.fetch_cds_features_for_seqids(
+                    dataset_name=dataset_name,
+                    seqids=seqids,
+                )
+                _append_neighborhood_rows(
+                    loci_rows=loci_rows,
+                    gene_rows=gene_rows,
+                    dataset_name=dataset_name,
+                    anchors=anchors,
+                    anchor_features=anchor_features,
+                    cds=cds,
+                    taxonomy=taxonomy,
+                    created_at=created_at,
+                    window_genes=window_genes,
+                    corpus_store_root=str(store_root),
+                )
+    else:
+        catalogs = _catalog_paths(read_refseq_catalog_manifest(manifest, root=root))
+        for dataset_name, anchors in anchors_by_dataset.items():
+            db = catalogs.get(dataset_name)
+            if db is None:
+                raise ValueError(f"no RefSeq catalog for dataset: {dataset_name}")
+            with duckdb.connect(str(db), read_only=True) as connection:
+                taxonomy = _taxonomy_metadata(connection)
+                anchor_features = _anchor_feature_rows(connection, anchors)
+                missing = [
+                    anchor
+                    for index, anchor in enumerate(anchors)
+                    if index not in anchor_features
+                ]
+                if missing:
+                    raise ValueError(f"anchor feature not found: {missing[0]}")
 
-            start_index = max(0, anchor_index - window_genes)
-            end_index = min(len(cds_rows) - 1, anchor_index + window_genes)
-            anchor_accession = str(anchor_feature["protein_accession"]) or str(
-                anchor["protein_accession"],
-            )
-            anchor_family = str(anchor["anchor_family"])
-            locus_id = (
-                f"{str(anchor['analyte']).lower()}__{dataset_name}__"
-                f"{_safe_identifier(anchor_family)}__"
-                f"{anchor_accession or str(anchor_feature['locus_tag'])}"
-            )
-            loci_rows.append(
-                {
-                    "locus_id": locus_id,
-                    "analyte": str(anchor["analyte"]),
-                    "anchor_accession": anchor_accession,
-                    "anchor_family": anchor_family,
-                    "organism": dataset_name,
-                    "taxon_id": 0,
-                    "cluster_id": int(str(anchor["_cluster_id"])),
-                    "contig_id": str(anchor_feature["seqid"]),
-                    "window_size": end_index - start_index + 1,
-                    "is_boundary_truncated": start_index == 0
-                    or end_index == len(cds_rows) - 1,
-                    "marker_genes_present": [anchor_family],
-                    "accessory_genes_present": [],
-                    "locus_score": 0.0,
-                    "locus_confidence": "low",
-                    "taxonomic_context_score": 0.0,
-                    "operon_integrity_score": 0.0,
-                    "created_at": created_at,
-                },
-            )
-            anchor_start = int(str(anchor_feature["start_nt"]))
-            for feature_index in range(start_index, end_index + 1):
-                feature = cds_rows[feature_index]
-                relative_index = feature_index - anchor_index
-                gene_accession = (
-                    str(feature["protein_accession"])
-                    or str(feature["feature_id"])
-                    or str(feature["locus_tag"])
+                seqids = sorted(
+                    {str(feature["seqid"]) for feature in anchor_features.values()},
                 )
-                gene_rows.append(
-                    {
-                        "locus_id": locus_id,
-                        "gene_accession": gene_accession,
-                        "relative_index": relative_index,
-                        "relative_start": int(str(feature["start_nt"]))
-                        - anchor_start,
-                        "relative_stop": int(str(feature["end_nt"])) - anchor_start,
-                        "strand": str(feature["strand"])
-                        if feature["strand"] in ["+", "-"]
-                        else "+",
-                        "product_description": str(feature["product"]),
-                        "pfam_ids": [],
-                        "pfam_descriptions": [],
-                        "interpro_ids": [],
-                        "interpro_descriptions": [],
-                        "functional_class": "anchor"
-                        if relative_index == 0
-                        else "unknown",
-                        "regulator_class": "none",
-                        "sensory_domains": [],
-                        "is_anchor": relative_index == 0,
-                        "is_regulator_candidate": False,
-                    },
-                )
+                cds = _read_cds_features_for_seqids(connection, seqids)
+            _append_neighborhood_rows(
+                loci_rows=loci_rows,
+                gene_rows=gene_rows,
+                dataset_name=dataset_name,
+                anchors=anchors,
+                anchor_features=anchor_features,
+                cds=cds,
+                taxonomy=taxonomy,
+                created_at=created_at,
+                window_genes=window_genes,
+                corpus_store_root="",
+            )
 
     loci = pl.DataFrame(
         loci_rows,
@@ -1040,3 +1181,109 @@ def extract_refseq_neighborhoods(
             .with_columns(pl.col("operon_integrity_score").fill_null(0.0))
         )
     return validate(loci, LociSchema), validate(genes, GenesSchema)
+
+
+def _append_neighborhood_rows(
+    *,
+    loci_rows: list[dict[str, object]],
+    gene_rows: list[dict[str, object]],
+    dataset_name: str,
+    anchors: list[dict[str, object]],
+    anchor_features: dict[int, dict[str, object]],
+    cds: pl.DataFrame,
+    taxonomy: dict[str, str | int],
+    created_at: datetime,
+    window_genes: int,
+    corpus_store_root: str,
+) -> None:
+    cds_by_seqid: dict[str, list[dict[str, object]]] = {}
+    for feature in cds.iter_rows(named=True):
+        cds_by_seqid.setdefault(str(feature["seqid"]), []).append(dict(feature))
+
+    for anchor_index_in_dataset, anchor in enumerate(anchors):
+        anchor_feature = anchor_features[anchor_index_in_dataset]
+        anchor_key = _feature_key(anchor_feature)
+        cds_rows = cds_by_seqid.get(str(anchor_feature["seqid"]), [])
+        anchor_index = None
+        for index, feature in enumerate(cds_rows):
+            if _feature_key(feature) == anchor_key:
+                anchor_index = index
+                break
+        if anchor_index is None:
+            raise ValueError(
+                f"anchor feature not found in contig CDS order: {anchor}",
+            )
+
+        start_index = max(0, anchor_index - window_genes)
+        end_index = min(len(cds_rows) - 1, anchor_index + window_genes)
+        anchor_accession = str(anchor_feature["protein_accession"]) or str(
+            anchor["protein_accession"],
+        )
+        anchor_family = str(anchor["anchor_family"])
+        locus_id = (
+            f"{str(anchor['analyte']).lower()}__{dataset_name}__"
+            f"{_safe_identifier(anchor_family)}__"
+            f"{anchor_accession or str(anchor_feature['locus_tag'])}"
+        )
+        loci_rows.append(
+            {
+                "locus_id": locus_id,
+                "analyte": str(anchor["analyte"]),
+                "anchor_accession": anchor_accession,
+                "anchor_family": anchor_family,
+                "organism": dataset_name,
+                "taxon_id": int(taxonomy["taxon_id"]),
+                "cluster_id": int(str(anchor["_cluster_id"])),
+                "contig_id": str(anchor_feature["seqid"]),
+                "window_size": end_index - start_index + 1,
+                "is_boundary_truncated": start_index == 0
+                or end_index == len(cds_rows) - 1,
+                "marker_genes_present": [anchor_family],
+                "accessory_genes_present": [],
+                "locus_score": 0.0,
+                "locus_confidence": "low",
+                "taxonomic_context_score": 0.0,
+                "operon_integrity_score": 0.0,
+                "created_at": created_at,
+                "provenance_source": "refseq",
+                "corpus_store_root": corpus_store_root,
+                "superkingdom": str(taxonomy["superkingdom"]),
+                "phylum": str(taxonomy["phylum"]),
+                "class": str(taxonomy["class"]),
+                "order": str(taxonomy["order"]),
+                "family": str(taxonomy["family"]),
+                "genus": str(taxonomy["genus"]),
+                "species": str(taxonomy["species"]),
+            },
+        )
+        anchor_start = int(str(anchor_feature["start_nt"]))
+        for feature_index in range(start_index, end_index + 1):
+            feature = cds_rows[feature_index]
+            relative_index = feature_index - anchor_index
+            gene_accession = (
+                str(feature["protein_accession"])
+                or str(feature["feature_id"])
+                or str(feature["locus_tag"])
+            )
+            gene_rows.append(
+                {
+                    "locus_id": locus_id,
+                    "gene_accession": gene_accession,
+                    "relative_index": relative_index,
+                    "relative_start": int(str(feature["start_nt"])) - anchor_start,
+                    "relative_stop": int(str(feature["end_nt"])) - anchor_start,
+                    "strand": str(feature["strand"])
+                    if feature["strand"] in ["+", "-"]
+                    else "+",
+                    "product_description": str(feature["product"]),
+                    "pfam_ids": [],
+                    "pfam_descriptions": [],
+                    "interpro_ids": [],
+                    "interpro_descriptions": [],
+                    "functional_class": "anchor" if relative_index == 0 else "unknown",
+                    "regulator_class": "none",
+                    "sensory_domains": [],
+                    "is_anchor": relative_index == 0,
+                    "is_regulator_candidate": False,
+                },
+            )

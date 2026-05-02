@@ -122,6 +122,10 @@ def fetch_assets(
             if expected_hash is None or existing_hash == expected_hash:
                 written.append(output)
                 continue
+            raise ValueError(
+                f"asset {asset['name']} hash mismatch: "
+                f"expected {expected_hash}, observed {existing_hash}",
+            )
 
         combine = cast(CombineMode, asset.get("combine", "single"))
         with tempfile.TemporaryDirectory(prefix=f"gasregnet-{asset['name']}-") as tmp:

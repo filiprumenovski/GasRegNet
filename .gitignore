@@ -11,5 +11,6 @@ results/*
 cache/
 data/external/
 data/profiles/alignments/
+data/profiles/diamond_seeds/
 databases/
 .snakemake/

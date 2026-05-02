@@ -18,10 +18,13 @@ def test_help_lists_core_subcommands() -> None:
     assert result.exit_code == 0
     for command in (
         "validate-config",
+        "check-tools",
         "fetch-assets",
         "build-profiles",
+        "build-seed-databases",
         "index-refseq",
         "index-refseq-corpus",
+        "enumerate-shards",
         "query-refseq",
         "query-refseq-corpus",
         "summarize-refseq-corpus",
@@ -97,6 +100,66 @@ assets:
     assert (tmp_path / "imported" / "seed.faa").read_text(encoding="utf-8") == (
         ">seed\nMA\n"
     )
+
+
+def test_check_tools_command_reports_missing_required_tools(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("PATH", "")
+
+    result = runner.invoke(app, ["check-tools", "--out", str(tmp_path / "tools.yaml")])
+
+    assert result.exit_code != 0
+    assert "required external tool not found" in result.output
+
+
+def test_build_seed_databases_runs_diamond_per_family(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_which(name: str) -> str | None:
+        return "/usr/local/bin/diamond" if name == "diamond" else None
+
+    def fake_run(
+        args: list[str],
+        *,
+        check: bool,
+        capture_output: bool,
+        text: bool,
+    ) -> None:
+        calls.append(args)
+        assert check is True
+        assert capture_output is True
+        assert text is True
+
+    monkeypatch.setattr("gasregnet.cli.shutil.which", fake_which)
+    monkeypatch.setattr("gasregnet.cli.subprocess.run", fake_run)
+
+    result = runner.invoke(
+        app,
+        [
+            "build-seed-databases",
+            "--config",
+            "configs/headline.yaml",
+            "--out",
+            str(tmp_path),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(calls) == 19
+    assert [
+        "/usr/local/bin/diamond",
+        "makedb",
+        "--in",
+        "data/seeds/co_coxL_anchor_seeds.faa",
+        "--db",
+        str(tmp_path / "CO__coxL.dmnd"),
+    ] in calls
+    assert str(tmp_path / "cyd_control__cydA.dmnd") in result.output
 
 
 def test_build_benchmark_writes_csv_header(tmp_path: Path) -> None:

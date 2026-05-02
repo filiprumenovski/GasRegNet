@@ -52,34 +52,71 @@ def score_taxonomic_context_by_analyte(
     if loci.is_empty():
         return validate(loci, LociSchema)
 
-    scored_parts: list[pl.DataFrame] = []
-    analyte_names = [analyte.analyte for analyte in analytes]
+    known_parts: list[pl.DataFrame] = []
     for analyte in analytes:
-        subset = loci.filter(pl.col("analyte") == analyte.analyte)
-        if subset.is_empty():
-            continue
         known_path = analyte.known_organisms_table
         if not known_path.is_absolute():
             known_path = root / known_path
         known = pl.read_csv(known_path) if known_path.exists() else pl.DataFrame()
         if known.is_empty():
-            scored_parts.append(
-                subset.with_columns(pl.lit(0.0).alias("taxonomic_context_score")),
+            continue
+        required = {"organism", "taxon_id"}
+        missing_columns = required - set(known.columns)
+        if missing_columns:
+            missing_text = ", ".join(sorted(missing_columns))
+            msg = f"known-organism table is missing column(s): {missing_text}"
+            raise ValueError(msg)
+        known_parts.append(
+            known.select(
+                pl.lit(analyte.analyte).alias("analyte"),
+                pl.col("organism").cast(pl.Utf8),
+                pl.col("taxon_id").cast(pl.Int64),
             )
-        else:
-            scored_parts.append(
-                score_taxonomic_context(
-                    subset,
-                    known,
-                    matched_score=matched_score,
-                ),
-            )
-
-    missing = loci.filter(~pl.col("analyte").is_in(analyte_names))
-    if not missing.is_empty():
-        scored_parts.append(
-            missing.with_columns(pl.lit(0.0).alias("taxonomic_context_score")),
+            .unique(maintain_order=True),
         )
-    if not scored_parts:
-        return validate(loci, LociSchema)
-    return validate(pl.concat(scored_parts, how="vertical"), LociSchema)
+
+    if not known_parts:
+        return validate(
+            loci.with_columns(pl.lit(0.0).alias("taxonomic_context_score")),
+            LociSchema,
+        )
+
+    known = pl.concat(known_parts, how="vertical")
+    organism_matches = known.select("analyte", "organism").unique().with_columns(
+        pl.lit(True).alias("__organism_match"),
+    )
+    taxon_matches = known.select("analyte", "taxon_id").unique().with_columns(
+        pl.lit(True).alias("__taxon_match"),
+    )
+    analyte_order = pl.DataFrame(
+        {
+            "analyte": [analyte.analyte for analyte in analytes],
+            "__analyte_order": list(range(len(analytes))),
+        },
+    )
+    scored = (
+        loci.with_row_index("__row_index")
+        .join(organism_matches, on=["analyte", "organism"], how="left")
+        .join(taxon_matches, on=["analyte", "taxon_id"], how="left")
+        .join(analyte_order, on="analyte", how="left")
+        .with_columns(
+            pl.when(
+                pl.col("__organism_match").fill_null(False)
+                | pl.col("__taxon_match").fill_null(False),
+            )
+            .then(pl.lit(matched_score))
+            .otherwise(pl.lit(0.0))
+            .alias("taxonomic_context_score"),
+            pl.col("__analyte_order").fill_null(len(analytes)),
+        )
+        .sort(["__analyte_order", "__row_index"])
+        .drop(
+            [
+                "__row_index",
+                "__organism_match",
+                "__taxon_match",
+                "__analyte_order",
+            ],
+        )
+    )
+    return validate(scored, LociSchema)

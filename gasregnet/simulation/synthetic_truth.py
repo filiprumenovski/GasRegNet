@@ -89,11 +89,14 @@ def simulate_synthetic_truth_corpus(
                 "taxonomic_context_score": 0.0,
                 "operon_integrity_score": 0.0,
                 "created_at": created_at,
+                "provenance_source": "synthetic",
+                "superkingdom": "Bacteria",
                 "phylum": f"synthetic_phylum_{cluster_id}",
                 "class": f"synthetic_class_{cluster_id}",
                 "order": f"synthetic_order_{cluster_id}",
                 "family": f"synthetic_family_{cluster_id}",
                 "genus": f"Synthgenus{cluster_id}",
+                "species": organism,
             },
         )
         regulator_class = _regulator_class(index, has_truth, rng, annotation_noise)

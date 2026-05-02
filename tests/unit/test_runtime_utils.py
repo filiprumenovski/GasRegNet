@@ -48,6 +48,43 @@ def test_build_manifest_hashes_declared_inputs_deterministically(
     assert first.input_hashes == second.input_hashes
 
 
+def test_build_manifest_hashes_files_inside_input_directories(tmp_path: Path) -> None:
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    (inputs / "a.faa").write_text(">a\nMA\n", encoding="utf-8")
+    nested = inputs / "nested"
+    nested.mkdir()
+    (nested / "b.hmm").write_text("HMM\n", encoding="utf-8")
+
+    manifest = build_manifest(
+        seed=7,
+        command="gasregnet run",
+        input_paths={"assets": inputs},
+    )
+
+    assert set(manifest.input_hashes) == {
+        "assets/a.faa",
+        "assets/nested/b.hmm",
+    }
+
+
+def test_build_manifest_loads_tools_resolved_yaml(tmp_path: Path) -> None:
+    tools = tmp_path / "tools_resolved.yaml"
+    tools.write_text(
+        "diamond:\n  version: diamond version 2.1\n  path: /bin/diamond\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_manifest(
+        seed=7,
+        command="gasregnet run",
+        tools_resolved=tools,
+    )
+
+    assert manifest.external_versions["diamond"]["version"] == "diamond version 2.1"
+    assert "tools_resolved" in manifest.input_hashes
+
+
 def test_write_manifest_outputs_sorted_json(tmp_path: Path) -> None:
     manifest = build_manifest(seed=1, command="gasregnet test")
 

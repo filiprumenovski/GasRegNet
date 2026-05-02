@@ -47,10 +47,11 @@ class AnchorFamilyConfig(StrictModel):
     pfam_required: list[str]
     role: Literal["primary", "accessory", "contextual"]
     pfam_supporting: list[str] = Field(default_factory=list)
+    anchor_seeds: Path | None = None
 
 
 class AnalyteConfig(StrictModel):
-    analyte: Literal["CO", "NO", "CN", "O2"]
+    analyte: Literal["CO", "NO", "CN", "O2", "cyd_control"]
     display_name: str
     anchor_seeds: Path
     anchor_families: list[AnchorFamilyConfig]
@@ -191,12 +192,15 @@ def _load_optional_entries(path: Path, key: str) -> list[dict[str, Any]]:
 
 def _compose_from_dir(config_dir: Path) -> dict[str, Any]:
     sensory_path = config_dir / "sensory_domains.yaml"
+    analyte_dir = config_dir / "analytes"
+    analyte_names = ["co", "no", "cn"]
+    if (analyte_dir / "cyd_control.yaml").exists():
+        analyte_names.append("cyd_control")
+    analyte_names.append("o2")
     return {
         "analytes": [
-            _read_yaml(config_dir / "analytes" / "co.yaml"),
-            _read_yaml(config_dir / "analytes" / "no.yaml"),
-            _read_yaml(config_dir / "analytes" / "cn.yaml"),
-            _read_yaml(config_dir / "analytes" / "o2.yaml"),
+            _read_yaml(analyte_dir / f"{name}.yaml")
+            for name in analyte_names
         ],
         "regulator_families": _load_entries(
             config_dir / "regulator_families.yaml",

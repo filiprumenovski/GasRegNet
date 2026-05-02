@@ -102,6 +102,56 @@ def test_hmmsearch_streams_sequence_file_to_pyhmmer(
     assert seen_targets == [streamed_sequences]
 
 
+def test_hmmsearch_batches_profiles_without_materializing_all(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    profile = tmp_path / "profile.hmm"
+    sequences = tmp_path / "seqs.faa"
+    profile.write_text("HMMER3/f\n", encoding="utf-8")
+    sequences.write_text(">target1\nM\n", encoding="utf-8")
+    seen_query_batch_sizes: list[int] = []
+    sequence_file_opens = 0
+
+    monkeypatch.setattr(
+        "gasregnet.search.hmmer.plan7.HMMFile",
+        lambda _: _FakeContext([object(), object(), object(), object(), object()]),
+    )
+
+    def fake_sequence_file(*_args: object, **_kwargs: object) -> _FakeContext:
+        nonlocal sequence_file_opens
+        sequence_file_opens += 1
+        return _FakeContext(object())
+
+    monkeypatch.setattr("gasregnet.search.hmmer.easel.SequenceFile", fake_sequence_file)
+
+    def fake_hmmsearch(
+        queries: object,
+        _targets: object,
+        **_kwargs: object,
+    ) -> list[_FakeTopHits]:
+        seen_query_batch_sizes.append(len(queries))  # type: ignore[arg-type]
+        return [_FakeTopHits()]
+
+    monkeypatch.setattr("gasregnet.search.hmmer.hmmer.hmmsearch", fake_hmmsearch)
+
+    hits = hmmsearch(profile, sequences, query_batch_size=2)
+
+    assert hits.height == 3
+    assert seen_query_batch_sizes == [2, 2, 1]
+    assert sequence_file_opens == 3
+
+
+def test_hmmsearch_rejects_invalid_query_batch_size(tmp_path: Path) -> None:
+    profile = tmp_path / "profile.hmm"
+    sequences = tmp_path / "seqs.faa"
+    profile.write_text("HMMER3/f\n", encoding="utf-8")
+    sequences.write_text(">target1\nM\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="query_batch_size"):
+        hmmsearch(profile, sequences, query_batch_size=0)
+
+
 def test_hmmsearch_rejects_missing_profile(tmp_path: Path) -> None:
     with pytest.raises(MissingInputError, match="HMM profile"):
         hmmsearch(tmp_path / "missing.hmm", tmp_path / "seqs.faa")

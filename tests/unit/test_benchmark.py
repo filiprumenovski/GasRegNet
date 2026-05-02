@@ -63,3 +63,18 @@ def test_regulators_v2_benchmark_has_required_groups() -> None:
     assert benchmark.filter(pl.col("verify_pmid")).height > 0
     accessions = benchmark.filter(pl.col("uniprot_accession").str.len_chars() > 0)
     assert accessions.height >= 28
+
+
+def test_co_anchor_benchmark_curates_aerobic_and_anaerobic_codhs() -> None:
+    benchmark = load_benchmark_csv(Path("data/benchmarks/anchors_v1.csv"))
+    co_rows = benchmark.filter(pl.col("analyte") == "CO")
+
+    cooS_rows = co_rows.filter(pl.col("anchor_family") == "cooS")
+    coxL_rows = co_rows.filter(pl.col("anchor_family") == "coxL")
+
+    assert cooS_rows.height >= 2
+    assert coxL_rows.height >= 2
+    assert cooS_rows.filter(pl.col("uniprot_accession") == "P31896").height == 1
+    assert coxL_rows.filter(pl.col("uniprot_accession") == "P19919").height == 1
+    assert cooS_rows.filter(pl.col("notes").str.contains("Anaerobic")).height >= 1
+    assert coxL_rows.filter(pl.col("notes").str.contains("Aerobic")).height >= 1

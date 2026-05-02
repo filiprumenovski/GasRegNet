@@ -116,3 +116,65 @@ def test_score_taxonomic_context_by_analyte_uses_configured_tables(
     scored = score_taxonomic_context_by_analyte(loci_frame(), [analyte])
 
     assert scored["taxonomic_context_score"].item() == 1.0
+
+
+def test_score_taxonomic_context_by_analyte_scores_with_vectorized_joins(
+    tmp_path: Path,
+) -> None:
+    co_known = tmp_path / "co_known.csv"
+    no_known = tmp_path / "no_known.csv"
+    co_known.write_text(
+        "organism,taxon_id,evidence,pmid,notes\n"
+        "CO organism,111,literature,00000000,\n",
+        encoding="utf-8",
+    )
+    no_known.write_text(
+        "organism,taxon_id,evidence,pmid,notes\n"
+        "Other organism,222,literature,00000000,\n",
+        encoding="utf-8",
+    )
+    config = load_config(Path("configs"))
+    analytes = [
+        config.analytes[0].model_copy(
+            update={"analyte": "CO", "known_organisms_table": co_known},
+        ),
+        config.analytes[1].model_copy(
+            update={"analyte": "NO", "known_organisms_table": no_known},
+        ),
+    ]
+    loci = pl.concat(
+        [
+            loci_frame().with_columns(
+                pl.lit("no-match-by-taxon").alias("locus_id"),
+                pl.lit("NO").alias("analyte"),
+                pl.lit("Different organism").alias("organism"),
+                pl.lit(222).cast(pl.Int64).alias("taxon_id"),
+            ),
+            loci_frame().with_columns(
+                pl.lit("co-match-by-organism").alias("locus_id"),
+                pl.lit("CO").alias("analyte"),
+                pl.lit("CO organism").alias("organism"),
+                pl.lit(999).cast(pl.Int64).alias("taxon_id"),
+            ),
+            loci_frame().with_columns(
+                pl.lit("o2-unconfigured").alias("locus_id"),
+                pl.lit("O2").alias("analyte"),
+                pl.lit("CO organism").alias("organism"),
+                pl.lit(111).cast(pl.Int64).alias("taxon_id"),
+            ),
+        ],
+        how="vertical",
+    )
+
+    scored = score_taxonomic_context_by_analyte(
+        loci,
+        analytes,
+        matched_score=0.25,
+    )
+
+    assert scored["locus_id"].to_list() == [
+        "co-match-by-organism",
+        "no-match-by-taxon",
+        "o2-unconfigured",
+    ]
+    assert scored["taxonomic_context_score"].to_list() == [0.25, 0.25, 0.0]
