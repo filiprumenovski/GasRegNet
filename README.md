@@ -33,6 +33,7 @@ flowchart LR
 - [Installation](#installation)
 - [Quickstart](#quickstart)
 - [Workflows](#workflows)
+- [Input Data](#input-data)
 - [Configuration](#configuration)
 - [Data Products](#data-products)
 - [Scoring Model](#scoring-model)
@@ -75,7 +76,7 @@ The current analyte set covers:
 ## Repository Status
 
 GasRegNet is a working research codebase with typed schemas, unit tests,
-integration tests, reproducibility workflows, and a UniRef90 readiness gate.
+integration tests, reproducibility workflows, and sharded corpus execution.
 
 Implemented and exercised:
 
@@ -96,10 +97,9 @@ Important limitations:
   probability of regulation.
 - Score bands are explicitly uncalibrated.
 - Archetyping is locus-neighborhood archetyping, not protein/fold archetyping.
-- UniRef90 sequence Parquets are useful for large-scale sequence discovery, but
-  they do not contain genome coordinates. Neighborhood/regulator extraction
-  still requires genome-resolved data such as RefSeq, GTDB, or equivalent
-  FASTA/GFF catalogs.
+- Neighborhood/regulator extraction requires genome-resolved data with protein
+  records, coordinates, contigs, and taxonomy. Clustered protein sequence
+  resources are not a substitute for genome catalogs.
 - Annotation-based smoke scans are useful for fixtures and quick panels; serious
   corpus runs should use profile/seed evidence wherever possible.
 
@@ -145,22 +145,29 @@ make lint
 uv run pytest -q
 ```
 
-Run the UniRef90 readiness gate:
+Run the acceptance checks:
 
 ```bash
-make uniref90-readiness
+make acceptance
 ```
 
-The readiness gate resolves external tools, builds per-family DIAMOND seed
-databases, runs targeted schema/profile/store tests, and dry-runs the sharded
-corpus workflow.
+The acceptance checks exercise the reproducibility path, schema contracts, and
+core scoring/reporting behavior.
+
+Dry-run the sharded corpus path:
+
+```bash
+make corpus-readiness
+```
+
+This checks external tool resolution, builds seed-search databases, runs
+targeted corpus tests, and asks Snakemake to plan the sharded corpus DAG.
 
 ## Workflows
 
 GasRegNet has three practical operating modes. Use the SQLite fixture for fast
-reproducibility, RefSeq/GTDB-style genome catalogs for biological neighborhood
-analysis, and UniRef90 for sequence-scale discovery before mapping hits back to
-genomes.
+reproducibility, small RefSeq-style catalogs for local development, and the
+partitioned corpus store for larger bacterial genome panels.
 
 ### 1. SQLite Fixture Reproducibility
 
@@ -240,20 +247,22 @@ uv run snakemake -s workflows/corpus_discovery.smk --cores 4 --dry-run
 
 Local and SLURM profile examples live in `workflows/profiles/`.
 
-### 4. UniRef90 Sequence Discovery
+## Input Data
 
-UniRef90 Parquets can be used for sequence-scale anchor search and profile
-specificity checks. They are not sufficient for genomic neighborhoods because
-UniRef records are clustered protein sequences, not genome-coordinate records.
+GasRegNet is intentionally strict about inputs because the central claim depends
+on local gene order. A production corpus should provide:
 
-Use UniRef90 as a discovery front end:
+| Input | Required fields | Why it matters |
+| --- | --- | --- |
+| Protein FASTA | stable protein IDs and amino-acid sequences | anchor detection and regulator-domain search |
+| GFF or equivalent feature table | protein IDs, contigs, coordinates, strand, products | neighborhood extraction |
+| Assembly or dataset manifest | dataset IDs, file paths, checksums | reproducible corpus indexing |
+| Taxonomy table or taxdump-derived database | taxon IDs and lineage ranks | breadth, stratification, and matched controls |
+| Anchor seeds/profiles | family-specific seed sequences or HMMs | analyte-specific anchor detection |
 
-1. Convert or stream UniRef90 XML/Parquet into sequence shards.
-2. Run DIAMOND/HMMER against GasRegNet seed/profile assets.
-3. Keep UniRef IDs, representative accessions, taxon IDs, sequence checksums,
-   and UniRef50/UniRef100 cross-links.
-4. Map interesting hits back to genome-resolved RefSeq/GTDB/UniProt member
-   records before extracting neighborhoods.
+The project can ingest tiny EFI-GNT-style SQLite fixtures for reproducibility,
+but real discovery should use bacterial genome catalogs with coordinate-bearing
+feature records.
 
 ## Configuration
 
@@ -338,17 +347,22 @@ For genome-resolved scaling, prefer the partitioned corpus-store path over
 per-genome DuckDB catalogs. The corpus store is organized as Hive-partitioned
 Parquet and is queried through DuckDB with dataset/phylum predicates.
 
-For sequence-scale discovery, keep UniRef90 and genome context separate:
+The important rule is to keep the data model genome-resolved. GasRegNet needs:
 
-- UniRef90/UniProt: broad homolog discovery and profile specificity checks.
-- RefSeq/GTDB/other genome catalogs: neighborhood extraction and regulator
-  context.
+- protein sequences
+- feature coordinates
+- contig or assembly identifiers
+- strand and neighboring gene order
+- taxonomy with stable taxon IDs and lineage fields
+
+Pure protein-cluster datasets can help develop anchor profiles, but they cannot
+support the neighborhood claims this project is designed to make.
 
 The intended large-run pattern is:
 
-1. Search UniRef90 or another sequence corpus for broad anchor recall.
-2. Map high-value hits back to genome-resolved records where possible.
-3. Build a RefSeq/GTDB-style partitioned corpus store.
+1. Build or download a bacterial genome catalog with FASTA, GFF, and taxonomy.
+2. Index it into the partitioned corpus store.
+3. Enumerate shards by dataset, phylum, or another stable partition key.
 4. Run sharded anchor detection and neighborhood extraction.
 5. Score candidates and inspect benchmark/enrichment/archetype outputs.
 

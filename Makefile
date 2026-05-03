@@ -1,4 +1,4 @@
-.PHONY: sync lint test assets profiles seed-databases datasets index-datasets summarize-datasets scan-datasets discover-motifs embed-proteins foldseek-search fit-bayesian build-views emit-provenance check-tools repro repro-real corpus-repro acceptance uniref90-readiness clean
+.PHONY: sync lint test assets profiles seed-databases datasets index-datasets summarize-datasets scan-datasets discover-motifs embed-proteins foldseek-search fit-bayesian build-views emit-provenance check-tools repro repro-real corpus-repro acceptance corpus-readiness clean
 
 export PATH := $(CURDIR)/cache/bin:$(PATH)
 
@@ -54,7 +54,7 @@ corpus-repro: datasets index-datasets
 acceptance:
 	./scripts/run_acceptance.sh
 
-uniref90-readiness:
+corpus-readiness:
 	uv run gasregnet check-tools --out /tmp/gasregnet-tools-resolved.yaml
 	uv run gasregnet build-seed-databases --config configs/headline.yaml --out data/profiles/diamond_seeds
 	uv run pytest tests/unit/test_config.py tests/unit/test_schemas.py tests/unit/datasets/test_refseq.py tests/unit/datasets/test_corpus_store.py tests/unit/annotation/test_ncbi_taxonomy.py tests/unit/search/test_hmmer.py
