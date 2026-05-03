@@ -8,8 +8,6 @@ from pathlib import Path
 import duckdb
 import polars as pl
 
-from gasregnet.datasets.corpus_store import register_views
-
 FEATURE_COLUMNS = [
     "seqid",
     "source",
@@ -33,6 +31,32 @@ class CorpusStoreHandle:
 
     store_root: Path
     connection: duckdb.DuckDBPyConnection
+
+    def _dataset_phylum(self, dataset_name: str) -> str:
+        row = self.connection.execute(
+            "select phylum from datasets where dataset_name = ?",
+            [dataset_name],
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"dataset not found in corpus store: {dataset_name}")
+        return str(row[0])
+
+    def _partition_path(self, table: str, dataset_name: str) -> Path:
+        phylum = self._dataset_phylum(dataset_name)
+        path = (
+            self.store_root
+            / table
+            / f"phylum={phylum}"
+            / f"dataset_name={dataset_name}"
+            / "part-0.parquet"
+        )
+        if not path.exists():
+            raise FileNotFoundError(path)
+        return path
+
+    @staticmethod
+    def _path_sql(path: Path) -> str:
+        return str(path).replace("'", "''")
 
     def __enter__(self) -> CorpusStoreHandle:
         return self
@@ -92,30 +116,32 @@ class CorpusStoreHandle:
                     "sequence": pl.Utf8,
                 },
             )
-        dataset_filter = "and proteins.dataset_name = ?" if dataset_name else ""
+        if dataset_name:
+            proteins_path = self._path_sql(
+                self._partition_path("proteins", dataset_name),
+            )
+            features_path = self._path_sql(
+                self._partition_path("features", dataset_name),
+            )
+            return self.connection.execute(
+                f"""
+                select
+                    ? as dataset_name,
+                    proteins.protein_accession,
+                    coalesce(features.locus_tag, '') as locus_tag,
+                    coalesce(features.gene, '') as gene,
+                    coalesce(features.product, proteins.description) as product,
+                    proteins.sequence
+                from parquet_scan('{proteins_path}') as proteins
+                left join parquet_scan('{features_path}') as features
+                  on proteins.protein_accession = features.protein_accession
+                where proteins.protein_accession in (select unnest(?::varchar[]))
+                """,
+                [dataset_name, protein_accessions],
+            ).pl()
         params: list[object] = [protein_accessions]
         if dataset_name:
             params.append(dataset_name)
-        return self.connection.execute(
-            f"""
-            select
-                proteins.dataset_name,
-                proteins.protein_accession,
-                coalesce(features.locus_tag, '') as locus_tag,
-                coalesce(features.gene, '') as gene,
-                coalesce(features.product, proteins.description) as product,
-                proteins.sequence
-            from proteins
-            left join features
-              on proteins.dataset_name = features.dataset_name
-             and proteins.protein_accession = features.protein_accession
-            where proteins.protein_accession in (select unnest(?::varchar[]))
-              {dataset_filter}
-            """,
-            params,
-        ).pl()
-
-    def fetch_proteins_for_dataset(self, dataset_name: str) -> pl.DataFrame:
         return self.connection.execute(
             """
             select
@@ -129,7 +155,26 @@ class CorpusStoreHandle:
             left join features
               on proteins.dataset_name = features.dataset_name
              and proteins.protein_accession = features.protein_accession
-            where proteins.dataset_name = ?
+            where proteins.protein_accession in (select unnest(?::varchar[]))
+            """,
+            params,
+        ).pl()
+
+    def fetch_proteins_for_dataset(self, dataset_name: str) -> pl.DataFrame:
+        proteins_path = self._path_sql(self._partition_path("proteins", dataset_name))
+        features_path = self._path_sql(self._partition_path("features", dataset_name))
+        return self.connection.execute(
+            f"""
+            select
+                ? as dataset_name,
+                proteins.protein_accession,
+                coalesce(features.locus_tag, '') as locus_tag,
+                coalesce(features.gene, '') as gene,
+                coalesce(features.product, proteins.description) as product,
+                proteins.sequence
+            from parquet_scan('{proteins_path}') as proteins
+            left join parquet_scan('{features_path}') as features
+              on proteins.protein_accession = features.protein_accession
             order by proteins.protein_accession
             """,
             [dataset_name],
@@ -148,10 +193,11 @@ class CorpusStoreHandle:
                     **{column: pl.Utf8 for column in FEATURE_COLUMNS},
                 },
             )
+        features_path = self._path_sql(self._partition_path("features", dataset_name))
         return self.connection.execute(
-            """
+            f"""
             select
-                dataset_name,
+                ? as dataset_name,
                 seqid,
                 source,
                 feature_type,
@@ -165,9 +211,8 @@ class CorpusStoreHandle:
                 coalesce(protein_accession, '') as protein_accession,
                 coalesce(gene, '') as gene,
                 coalesce(product, '') as product
-            from features
-            where dataset_name = ?
-              and feature_type = 'CDS'
+            from parquet_scan('{features_path}')
+            where feature_type = 'CDS'
               and seqid in (select unnest(?::varchar[]))
               and protein_accession is not null
             order by seqid, start_nt, end_nt, protein_accession
@@ -201,8 +246,9 @@ class CorpusStoreHandle:
             },
         )
         self.connection.register("anchor_lookup", anchor_frame)
+        features_path = self._path_sql(self._partition_path("features", dataset_name))
         frame = self.connection.execute(
-            """
+            f"""
             with matched as (
                 select
                     anchor_lookup.anchor_row,
@@ -221,9 +267,8 @@ class CorpusStoreHandle:
                     coalesce(features.gene, '') as gene,
                     coalesce(features.product, '') as product
                 from anchor_lookup
-                join features
-                  on features.dataset_name = ?
-                 and anchor_lookup.protein_accession <> ''
+                join parquet_scan('{features_path}') as features
+                  on anchor_lookup.protein_accession <> ''
                  and features.feature_type = 'CDS'
                  and features.protein_accession = anchor_lookup.protein_accession
 
@@ -246,9 +291,8 @@ class CorpusStoreHandle:
                     coalesce(features.gene, '') as gene,
                     coalesce(features.product, '') as product
                 from anchor_lookup
-                join features
-                  on features.dataset_name = ?
-                 and anchor_lookup.locus_tag <> ''
+                join parquet_scan('{features_path}') as features
+                  on anchor_lookup.locus_tag <> ''
                  and features.feature_type = 'CDS'
                  and features.locus_tag = anchor_lookup.locus_tag
 
@@ -271,9 +315,8 @@ class CorpusStoreHandle:
                     coalesce(features.gene, '') as gene,
                     coalesce(features.product, '') as product
                 from anchor_lookup
-                join features
-                  on features.dataset_name = ?
-                 and anchor_lookup.gene <> ''
+                join parquet_scan('{features_path}') as features
+                  on anchor_lookup.gene <> ''
                  and features.feature_type = 'CDS'
                  and features.gene = anchor_lookup.gene
             ),
@@ -305,7 +348,6 @@ class CorpusStoreHandle:
             where row_number = 1
             order by anchor_row
             """,
-            [dataset_name, dataset_name, dataset_name],
         ).pl()
         self.connection.unregister("anchor_lookup")
         return {
@@ -331,5 +373,11 @@ def open_corpus_store(store_root: Path) -> CorpusStoreHandle:
     """Open a corpus store with registered DuckDB views."""
 
     connection = duckdb.connect()
-    register_views(connection, store_root)
+    datasets_path = str(store_root / "datasets.parquet").replace("'", "''")
+    connection.execute(
+        f"""
+        CREATE OR REPLACE VIEW datasets AS
+        SELECT * FROM parquet_scan('{datasets_path}')
+        """,
+    )
     return CorpusStoreHandle(store_root=store_root, connection=connection)

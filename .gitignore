@@ -10,6 +10,7 @@ results/*
 !results/.gitkeep
 cache/
 data/external/
+data/corpus_store/
 data/profiles/alignments/
 data/profiles/diamond_seeds/
 databases/

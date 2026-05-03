@@ -42,10 +42,14 @@ METADATA_SCHEMA = {
 }
 CATALOG_SCHEMA = {
     "dataset_name": pl.Utf8,
+    "organism": pl.Utf8,
     "protein_faa": pl.Utf8,
     "gff": pl.Utf8,
     "out_db": pl.Utf8,
     "taxon_id": pl.Utf8,
+    "assembly_accession": pl.Utf8,
+    "refseq_ftp_url": pl.Utf8,
+    "provenance_source": pl.Utf8,
     "superkingdom": pl.Utf8,
     "phylum": pl.Utf8,
     "class": pl.Utf8,
@@ -299,10 +303,14 @@ def read_refseq_catalog_manifest(manifest: Path, *, root: Path) -> pl.DataFrame:
         rows.append(
             {
                 "dataset_name": dataset_name,
+                "organism": str(raw.get("organism", dataset_name)),
                 "protein_faa": str(root / protein_faa),
                 "gff": str(root / gff),
                 "out_db": str(root / out_db),
                 "taxon_id": str((raw.get("taxonomy") or {}).get("taxon_id", "")),
+                "assembly_accession": str(raw.get("assembly_accession", "")),
+                "refseq_ftp_url": str(raw.get("refseq_ftp_url", "")),
+                "provenance_source": str(raw.get("provenance_source", "refseq")),
                 "superkingdom": str(
                     (raw.get("taxonomy") or {}).get("superkingdom", ""),
                 ),
@@ -412,6 +420,7 @@ def index_refseq_dataset_store(
     store_root: Path,
     dataset_name: str,
     taxonomy: dict[str, str | int],
+    metadata: dict[str, object] | None = None,
 ) -> Path:
     """Index RefSeq protein and annotation assets into a Parquet corpus store."""
 
@@ -426,6 +435,7 @@ def index_refseq_dataset_store(
         features=features,
         taxonomy=taxonomy,
         metadata={
+            **(metadata or {}),
             "protein_faa": protein_faa,
             "gff": gff,
             "n_proteins": proteins.height,
@@ -458,6 +468,12 @@ def index_refseq_corpus_store(
                 store_root=store_root,
                 dataset_name=str(row["dataset_name"]),
                 taxonomy=taxonomy,
+                metadata={
+                    "organism": str(row["organism"]),
+                    "assembly_accession": str(row["assembly_accession"]),
+                    "refseq_ftp_url": str(row["refseq_ftp_url"]),
+                    "provenance_source": str(row["provenance_source"]),
+                },
             ),
         )
     return outputs
